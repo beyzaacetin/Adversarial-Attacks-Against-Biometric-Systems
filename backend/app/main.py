@@ -584,4 +584,4 @@ def seed_demo_data():
     # Enroll via the API logic
     req = EnrollRequest(user_id="demo_user", keystroke_samples=samples)
     enroll_user(req)
-    print("✓ Demo user 'demo_user' pre-enrolled with 20 keystroke samples")
+    print("[OK] Demo user 'demo_user' pre-enrolled with 20 keystroke samples")
