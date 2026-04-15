@@ -221,6 +221,34 @@ export default function BiometricAuthDemo() {
     if (userProfile) setPhase("auth");
   };
 
+  const handleReset = () => {
+    setPhase("enroll");
+    setEnrollSamples([]);
+    setUserProfile(null);
+    setText("");
+    setKeystrokeEvents([]);
+    setMouseTrail([]);
+    setAuthResult(null);
+    setAttackResults([]);
+    setAttackType("fgsm");
+    setEpsilon(0.2);
+    setPgdSteps(20);
+    setMimicryNoise(0.1);
+    setDefenses({
+      smoothing: false,
+      squeezing: false,
+      strictThreshold: false,
+    });
+    setHistory([]);
+    setMouseScore(null);
+    setMouseProfile(null);
+    setMouseEnrollSamples([]);
+    currentKeys.current = {};
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  };
+
   // --- Authenticate ---
   const handleAuthenticate = () => {
     let features = extractKeystrokeFeatures(keystrokeEvents);
@@ -356,10 +384,13 @@ export default function BiometricAuthDemo() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e0e0e0", marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e0e0e0", marginBottom: 20, alignItems: "center" }}>
         <button style={tabStyle("enroll")} onClick={() => setPhase("enroll")}>1. Enroll</button>
         <button style={tabStyle("auth")} onClick={() => userProfile && setPhase("auth")}>2. Authenticate</button>
         <button style={tabStyle("attack")} onClick={() => userProfile && setPhase("attack")}>3. Attack</button>
+        <div style={{ marginLeft: "auto", paddingBottom: 8 }}>
+          <button style={btnOutline} onClick={handleReset}>Reset</button>
+        </div>
       </div>
 
       {/* ============ ENROLL ============ */}
