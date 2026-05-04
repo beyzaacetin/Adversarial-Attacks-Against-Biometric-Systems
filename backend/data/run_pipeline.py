@@ -15,9 +15,6 @@ def run_pipeline():
     print("  BIOMETRIC AUTHENTICATION - DATA PIPELINE")
     print("=" * 60)
     
-    # ========================================
-    # 1. KEYSTROKE DYNAMICS
-    # ========================================
     print("\n" + "=" * 60)
     print("  MODULE 1: KEYSTROKE DYNAMICS (CMU Format)")
     print("=" * 60)
@@ -43,9 +40,6 @@ def run_pipeline():
     
     ks_proc.save_processed_data(KS_PROC)
     
-    # ========================================
-    # 2. MOUSE DYNAMICS
-    # ========================================
     print("\n" + "=" * 60)
     print("  MODULE 2: MOUSE DYNAMICS (Balabit Format)")
     print("=" * 60)
@@ -63,9 +57,6 @@ def run_pipeline():
     train_df, test_df = mouse_proc.process_all_users()
     mouse_proc.save_processed(train_df, test_df, MOUSE_PROC)
     
-    # ========================================
-    # 3. TOUCH GESTURES
-    # ========================================
     print("\n" + "=" * 60)
     print("  MODULE 3: TOUCHSCREEN GESTURES")
     print("=" * 60)
@@ -80,11 +71,8 @@ def run_pipeline():
     proc = TouchPreprocessor(os.path.join(TOUCH_DIR, "touch_gestures.csv"))
     proc.load_and_process()
     
-    # ========================================
-    # SUMMARY
-    # ========================================
     elapsed = time.time() - start
-    
+
     print("\n" + "=" * 60)
     print("  PIPELINE SUMMARY")
     print("=" * 60)

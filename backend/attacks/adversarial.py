@@ -360,7 +360,6 @@ class AttackOrchestrator:
             print("  No impostor samples in test set, skipping attack evaluation")
             return {}, {}
         
-        # ---- BASELINE ----
         print(f"\n  Baseline (no attack):")
         baseline_pred = predict_fn(X_test)
         baseline_acc = accuracy_score(y_test, baseline_pred)
@@ -368,7 +367,6 @@ class AttackOrchestrator:
         
         all_attack_results = {"baseline_accuracy": baseline_acc}
         
-        # ---- FGSM at various epsilon ----
         print(f"\n  --- FGSM Attack ---")
         epsilons = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
         fgsm_results = []
@@ -383,7 +381,6 @@ class AttackOrchestrator:
         
         all_attack_results["fgsm"] = fgsm_results
         
-        # ---- PGD Attack ----
         print(f"\n  --- PGD Attack ---")
         pgd_results = []
         
@@ -396,7 +393,6 @@ class AttackOrchestrator:
         
         all_attack_results["pgd"] = pgd_results
         
-        # ---- Statistical Mimicry ----
         print(f"\n  --- Statistical Mimicry Attack ---")
         mimicry_results = []
         X_genuine_train = X_train[y_train == 1]
@@ -411,7 +407,6 @@ class AttackOrchestrator:
         
         all_attack_results["mimicry"] = mimicry_results
         
-        # ---- Noise Injection ----
         print(f"\n  --- Noise Injection ---")
         noise_results = []
         for std in [0.1, 0.5, 1.0, 2.0]:

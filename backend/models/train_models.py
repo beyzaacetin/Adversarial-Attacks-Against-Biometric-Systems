@@ -218,25 +218,19 @@ def main():
     trainer = ModelTrainer()
     all_test_data = {}
     
-    # ---- Keystroke ----
     ks_models, ks_results, ks_X_test, ks_y_test = train_keystroke_models(trainer)
     all_test_data["keystroke"] = {"X_test": ks_X_test, "y_test": ks_y_test}
     
-    # ---- Mouse ----
     ms_models, ms_results, ms_X_test, ms_y_test = train_mouse_models(trainer)
     all_test_data["mouse"] = {"X_test": ms_X_test, "y_test": ms_y_test}
     
-    # ---- Touch ----
     tc_models, tc_results, tc_X_test, tc_y_test = train_touch_models(trainer)
     all_test_data["touch"] = {"X_test": tc_X_test, "y_test": tc_y_test}
     
-    # ---- Multimodal Fusion ----
     fusion_results = test_multimodal_fusion(trainer, all_test_data)
     
-    # ---- Final Comparison ----
     print_final_comparison(trainer, fusion_results)
     
-    # ---- Save Everything ----
     MODEL_DIR = os.path.join(BASE_DIR, "../../datasets/trained_models")
     trainer.save_all(MODEL_DIR)
     

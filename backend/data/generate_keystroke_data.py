@@ -72,15 +72,7 @@ def generate_typing_samples(profile, n_samples=400):
     return data
 
 def generate_dataset(n_subjects=51, n_reps=400, output_dir="../../datasets/keystroke"):
-    """
-    Generate the full CMU-format keystroke dataset.
-    
-    Output format matches CMU exactly:
-    - subject: s001-s051
-    - sessionIndex: 1-8 (50 reps per session)
-    - rep: 1-50
-    - 31 timing features
-    """
+    """Generate the full CMU-format keystroke dataset."""
     os.makedirs(output_dir, exist_ok=True)
     
     cols = generate_column_names()
