@@ -65,12 +65,6 @@ class AppState:
         self.enrolled_users: Dict[str, dict] = {}
         self.models: Dict[str, object] = {}
         self.scalers: Dict[str, StandardScaler] = {}
-        self.defense_enabled: Dict[str, bool] = {
-            "input_smoothing": False,
-            "feature_squeezing": False,
-            "adversarial_training": False,
-            "threshold_strictness": False,
-        }
         self.auth_history: List[dict] = []
         self.attack_history: List[dict] = []
 
@@ -107,10 +101,6 @@ class AttackRequest(BaseModel):
     epsilon: Optional[float] = 0.2
     n_iterations: Optional[int] = 20
     noise_level: Optional[float] = 0.1
-
-class DefenseToggle(BaseModel):
-    defense_name: str
-    enabled: bool
 
 # ============================================================
 # FEATURE EXTRACTION (from raw browser events)
@@ -313,16 +303,6 @@ def authenticate(req: AuthRequest):
     scaler = state.scalers[req.user_id]
     features = np.array(req.keystroke_features).reshape(1, -1)
     
-    # Apply defenses if enabled
-    if state.defense_enabled.get("input_smoothing"):
-        noise = np.random.normal(0, 0.1, features.shape)
-        features = (features + features + noise) / 2
-    
-    if state.defense_enabled.get("feature_squeezing"):
-        f_min, f_max = features.min(), features.max()
-        f_range = f_max - f_min + 1e-8
-        features = np.round((features - f_min) / f_range * 16) / 16 * f_range + f_min
-    
     X_scaled = scaler.transform(features)
     
     results = {}
@@ -355,11 +335,7 @@ def authenticate(req: AuthRequest):
     scores = [r["score"] for r in results.values()]
     avg_score = np.mean(scores) if scores else 0
     
-    # Dynamic threshold if defense enabled
     threshold = 0.5
-    if state.defense_enabled.get("threshold_strictness"):
-        threshold = 0.7  # Stricter
-    
     is_genuine = avg_score > threshold
     
     auth_result = {
@@ -368,7 +344,6 @@ def authenticate(req: AuthRequest):
         "overall_score": float(avg_score),
         "threshold": threshold,
         "model_results": results,
-        "defenses_active": [k for k, v in state.defense_enabled.items() if v],
     }
     
     state.auth_history.append(auth_result)
@@ -511,19 +486,6 @@ def simulate_attack(req: AttackRequest):
     state.attack_history.append(result)
     return result
 
-@app.post("/api/defense/toggle")
-def toggle_defense(req: DefenseToggle):
-    """Enable or disable a defense mechanism."""
-    if req.defense_name not in state.defense_enabled:
-        raise HTTPException(400, f"Unknown defense: {req.defense_name}")
-    
-    state.defense_enabled[req.defense_name] = req.enabled
-    return {
-        "defense": req.defense_name,
-        "enabled": req.enabled,
-        "all_defenses": state.defense_enabled,
-    }
-
 @app.get("/api/stats")
 def get_stats():
     """Get authentication and attack statistics."""
@@ -539,7 +501,6 @@ def get_stats():
         "genuine_rate": genuine_count / max(n_auth, 1),
         "attack_success_rate": attack_success / max(n_attacks, 1),
         "enrolled_users": len(state.enrolled_users),
-        "defenses_active": [k for k, v in state.defense_enabled.items() if v],
     }
 
 @app.post("/api/keystroke/extract")

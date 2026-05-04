@@ -137,9 +137,6 @@ export default function BiometricAuthDemo() {
   const [epsilon, setEpsilon] = useState(0.2);
   const [pgdSteps, setPgdSteps] = useState(20);
   const [mimicryNoise, setMimicryNoise] = useState(0.1);
-  const [defenses, setDefenses] = useState({
-    smoothing: false, squeezing: false, strictThreshold: false,
-  });
   const [history, setHistory] = useState([]);
   const [mouseScore, setMouseScore] = useState(null);
   const [mouseProfile, setMouseProfile] = useState(null);
@@ -234,11 +231,6 @@ export default function BiometricAuthDemo() {
     setEpsilon(0.2);
     setPgdSteps(20);
     setMimicryNoise(0.1);
-    setDefenses({
-      smoothing: false,
-      squeezing: false,
-      strictThreshold: false,
-    });
     setHistory([]);
     setMouseScore(null);
     setMouseProfile(null);
@@ -254,17 +246,9 @@ export default function BiometricAuthDemo() {
     let features = extractKeystrokeFeatures(keystrokeEvents);
     if (!features || !userProfile) return;
 
-    // Apply defenses
-    if (defenses.smoothing) {
-      features = features.map((v) => (v + v + (Math.random() - 0.5) * 0.1) / 2);
-    }
-    if (defenses.squeezing) {
-      features = features.map((v) => Math.round(v * 16) / 16);
-    }
-
     const score = gaussianScore(features, userProfile.mean, userProfile.std);
     const cosine = cosineSimilarity(features, userProfile.mean);
-    const threshold = defenses.strictThreshold ? -2.0 : -5.0;
+    const threshold = -5.0;
     const isGenuine = score > threshold && cosine > 0.5;
 
     // Mouse score
@@ -473,22 +457,6 @@ export default function BiometricAuthDemo() {
       {/* ============ AUTHENTICATE ============ */}
       {phase === "auth" && (
         <div>
-          {/* Defense toggles */}
-          <div style={{ ...cardStyle, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 13, fontWeight: 500 }}>Defenses:</span>
-            {[
-              { key: "smoothing", label: "Input smoothing" },
-              { key: "squeezing", label: "Feature squeezing" },
-              { key: "strictThreshold", label: "Strict threshold" },
-            ].map(({ key, label }) => (
-              <label key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                <input type="checkbox" checked={defenses[key]}
-                  onChange={() => setDefenses((d) => ({ ...d, [key]: !d[key] }))} />
-                {label}
-              </label>
-            ))}
-          </div>
-
           <div style={cardStyle}>
             <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>
               Type the same phrase to authenticate
@@ -626,21 +594,6 @@ export default function BiometricAuthDemo() {
                   style={{ width: "100%", marginTop: 4 }} />
               </div>
             )}
-
-            {/* Defense toggles for attack testing */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-              {[
-                { key: "smoothing", label: "Input smoothing" },
-                { key: "squeezing", label: "Feature squeezing" },
-                { key: "strictThreshold", label: "Strict threshold" },
-              ].map(({ key, label }) => (
-                <label key={key} style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
-                  <input type="checkbox" checked={defenses[key]}
-                    onChange={() => setDefenses((d) => ({ ...d, [key]: !d[key] }))} />
-                  {label}
-                </label>
-              ))}
-            </div>
 
             <button style={btnPrimary} onClick={runAttack}>
               Launch {attackType.toUpperCase()} attack
