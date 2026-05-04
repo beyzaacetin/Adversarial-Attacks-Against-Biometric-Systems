@@ -1,21 +1,4 @@
-"""
-Touchscreen Gesture Dataset Generator & Preprocessor
-=====================================================
-Since no public touchscreen behavioral biometrics dataset is readily available,
-we generate synthetic data simulating mobile touch patterns.
-
-Simulated touch events:
-- Swipe (up, down, left, right)
-- Tap (single, double)
-- Long press
-- Pinch (zoom in/out)
-
-Features extracted per gesture:
-- Pressure, area, duration
-- Velocity, acceleration
-- Start/end position
-- Gesture shape characteristics
-"""
+"""Touchscreen gesture dataset generator and preprocessor."""
 
 import numpy as np
 import pandas as pd

@@ -1,12 +1,4 @@
-"""
-Adversarial Attack Runner
-===========================
-Runs all adversarial attacks against trained biometric models
-and evaluates defense mechanisms.
-
-Usage:
-    python run_attacks.py
-"""
+"""Runs all adversarial attacks against trained biometric models."""
 
 import sys
 import os

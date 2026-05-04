@@ -1,19 +1,4 @@
-"""
-Authentication Models
-======================
-Four ML models for behavioral biometric authentication:
-
-1. One-Class SVM     — Anomaly detection (train on genuine only)
-2. Random Forest     — Binary classification (genuine vs impostor)
-3. MLP Classifier    — Deep learning proxy (multi-layer neural network)
-4. Autoencoder (MLP) — Reconstruction-based anomaly detection
-
-Each model implements a common interface:
-  - train(X_train, y_train)
-  - predict(X_test) → labels
-  - predict_score(X_test) → continuous scores
-  - evaluate(X_test, y_test) → metrics dict
-"""
+"""ML authentication models for behavioral biometric data."""
 
 import numpy as np
 import json
@@ -29,16 +14,12 @@ from sklearn.metrics import (
 from sklearn.preprocessing import StandardScaler
 
 
-# ============================================================
-# BASE CLASS
-# ============================================================
-
 class BaseAuthModel:
     """Base class for all authentication models."""
     
     def __init__(self, name, model_type):
         self.name = name
-        self.model_type = model_type  # 'binary' or 'anomaly'
+        self.model_type = model_type
         self.model = None
         self.is_trained = False
         self.training_metrics = {}
@@ -76,9 +57,8 @@ class BaseAuthModel:
         cm = confusion_matrix(y_test, y_pred)
         if cm.shape == (2, 2):
             tn, fp, fn, tp = cm.ravel()
-            # Security-specific metrics
-            metrics["FAR"] = float(fp / (fp + tn)) if (fp + tn) > 0 else 0.0  # False Accept Rate
-            metrics["FRR"] = float(fn / (fn + tp)) if (fn + tp) > 0 else 0.0  # False Reject Rate
+            metrics["FAR"] = float(fp / (fp + tn)) if (fp + tn) > 0 else 0.0
+            metrics["FRR"] = float(fn / (fn + tp)) if (fn + tp) > 0 else 0.0
             metrics["true_positive"] = int(tp)
             metrics["true_negative"] = int(tn)
             metrics["false_positive"] = int(fp)
@@ -88,7 +68,6 @@ class BaseAuthModel:
         try:
             fpr, tpr, thresholds = roc_curve(y_test, scores)
             fnr = 1 - tpr
-            # Find threshold where FAR ≈ FRR
             eer_idx = np.nanargmin(np.abs(fpr - fnr))
             metrics["EER"] = float((fpr[eer_idx] + fnr[eer_idx]) / 2)
             metrics["EER_threshold"] = float(thresholds[eer_idx])
@@ -125,20 +104,8 @@ class BaseAuthModel:
             return pickle.load(f)
 
 
-# ============================================================
-# MODEL 1: ONE-CLASS SVM
-# ============================================================
-
 class OneClassSVMAuth(BaseAuthModel):
-    """
-    One-Class SVM for anomaly-based authentication.
-    
-    Security concept: Train ONLY on genuine user data. The model learns
-    the "boundary" of normal behavior. Anything outside → impostor.
-    
-    Pros: No impostor data needed for training, good for initial enrollment.
-    Cons: Sensitive to kernel/nu parameters, no probability output.
-    """
+    """One-Class SVM for anomaly-based authentication."""
     
     def __init__(self, kernel='rbf', nu=0.1, gamma='scale'):
         super().__init__("One-Class SVM", "anomaly")
@@ -146,8 +113,7 @@ class OneClassSVMAuth(BaseAuthModel):
         self.nu = nu
     
     def train(self, X_train, y_train=None):
-        """Train on genuine samples only. y_train is ignored."""
-        # If y_train provided, filter to genuine only
+        """Train on genuine samples only."""
         if y_train is not None:
             X_genuine = X_train[y_train == 1]
         else:
@@ -156,7 +122,6 @@ class OneClassSVMAuth(BaseAuthModel):
         self.model.fit(X_genuine)
         self.is_trained = True
         
-        # Training performance
         train_pred = self.model.predict(X_genuine)
         self.training_metrics = {
             "n_genuine_train": len(X_genuine),
@@ -167,7 +132,6 @@ class OneClassSVMAuth(BaseAuthModel):
     def predict(self, X_test):
         """Returns 1 (genuine) or 0 (impostor)."""
         raw = self.model.predict(X_test)
-        # OneClassSVM returns 1 for inlier, -1 for outlier
         return (raw == 1).astype(int)
     
     def predict_score(self, X_test):
@@ -175,20 +139,8 @@ class OneClassSVMAuth(BaseAuthModel):
         return self.model.decision_function(X_test)
 
 
-# ============================================================
-# MODEL 2: RANDOM FOREST
-# ============================================================
-
 class RandomForestAuth(BaseAuthModel):
-    """
-    Random Forest binary classifier for authentication.
-    
-    Security concept: Learn the boundary between genuine and impostor
-    typing/mouse patterns using an ensemble of decision trees.
-    
-    Pros: Handles non-linear patterns, feature importance, robust.
-    Cons: Needs impostor data for training, can overfit small datasets.
-    """
+    """Random Forest binary classifier for authentication."""
     
     def __init__(self, n_estimators=100, max_depth=10, random_state=42):
         super().__init__("Random Forest", "binary")
@@ -196,7 +148,7 @@ class RandomForestAuth(BaseAuthModel):
             n_estimators=n_estimators,
             max_depth=max_depth,
             random_state=random_state,
-            class_weight='balanced'  # Handle imbalanced genuine/impostor ratio
+            class_weight='balanced'
         )
     
     def train(self, X_train, y_train):
@@ -240,23 +192,8 @@ class RandomForestAuth(BaseAuthModel):
         return result
 
 
-# ============================================================
-# MODEL 3: MLP CLASSIFIER (Neural Network)
-# ============================================================
-
 class MLPAuth(BaseAuthModel):
-    """
-    Multi-Layer Perceptron for authentication.
-    
-    Acts as a proxy for deep learning (LSTM/GRU) when PyTorch/TF unavailable.
-    Uses multiple hidden layers with dropout-like regularization.
-    
-    Security concept: Learn complex non-linear patterns in behavioral data
-    that simpler models might miss (e.g., temporal dependencies in typing rhythm).
-    
-    Pros: Captures complex patterns, probability output, scales well.
-    Cons: Needs more data, black-box, computationally expensive.
-    """
+    """MLP neural network classifier for authentication."""
     
     def __init__(self, hidden_layers=(128, 64, 32), max_iter=500, random_state=42):
         super().__init__("MLP Neural Network", "binary")
@@ -264,7 +201,7 @@ class MLPAuth(BaseAuthModel):
             hidden_layer_sizes=hidden_layers,
             activation='relu',
             solver='adam',
-            alpha=0.001,  # L2 regularization
+            alpha=0.001,
             batch_size=32,
             learning_rate='adaptive',
             learning_rate_init=0.001,
@@ -303,24 +240,8 @@ class MLPAuth(BaseAuthModel):
         return []
 
 
-# ============================================================
-# MODEL 4: AUTOENCODER (Reconstruction-based Anomaly Detection)
-# ============================================================
-
 class AutoencoderAuth(BaseAuthModel):
-    """
-    Autoencoder for reconstruction-based anomaly detection.
-    
-    Uses sklearn's MLPRegressor as encoder-decoder:
-    Input → Compressed representation → Reconstructed input
-    
-    Security concept: Train on genuine data. The autoencoder learns to
-    reconstruct genuine patterns with low error. Impostor patterns will
-    have HIGH reconstruction error → detected as anomaly.
-    
-    Pros: Unsupervised, captures data distribution, sensitive to anomalies.
-    Cons: Threshold tuning needed, can be fooled by adversarial examples.
-    """
+    """Autoencoder for reconstruction-based anomaly detection."""
     
     def __init__(self, encoding_dim=8, threshold_percentile=95, random_state=42):
         super().__init__("Autoencoder", "anomaly")
@@ -332,9 +253,6 @@ class AutoencoderAuth(BaseAuthModel):
     
     def _build_model(self, input_dim):
         """Build autoencoder architecture."""
-        # Encoder: input_dim → 64 → 32 → encoding_dim
-        # Decoder: encoding_dim → 32 → 64 → input_dim
-        # Combined: input_dim → 64 → 32 → encoding_dim → 32 → 64 → input_dim
         
         hidden_sizes = (64, 32, self.encoding_dim, 32, 64)
         
@@ -361,8 +279,7 @@ class AutoencoderAuth(BaseAuthModel):
         return errors
     
     def train(self, X_train, y_train=None):
-        """Train autoencoder on genuine samples to reconstruct them."""
-        # Filter to genuine only
+        """Train autoencoder on genuine samples."""
         if y_train is not None:
             X_genuine = X_train[y_train == 1]
         else:
@@ -371,10 +288,7 @@ class AutoencoderAuth(BaseAuthModel):
         input_dim = X_genuine.shape[1]
         self._build_model(input_dim)
         
-        # Train: input = output (reconstruction task)
         self.model.fit(X_genuine, X_genuine)
-        
-        # Set threshold based on training reconstruction errors
         train_errors = self._reconstruction_error(X_genuine)
         self.threshold = np.percentile(train_errors, self.threshold_percentile)
         
@@ -393,13 +307,11 @@ class AutoencoderAuth(BaseAuthModel):
     def predict(self, X_test):
         """Classify as genuine (1) or impostor (0) based on reconstruction error."""
         errors = self._reconstruction_error(X_test)
-        # Low error → genuine (1), high error → impostor (0)
         return (errors <= self.threshold).astype(int)
     
     def predict_score(self, X_test):
         """Return negative reconstruction error (higher = more genuine)."""
         errors = self._reconstruction_error(X_test)
-        # Negate so higher score = more likely genuine (consistent with other models)
         return -errors
     
     def get_error_distribution(self, X_genuine, X_impostor):
@@ -415,19 +327,8 @@ class AutoencoderAuth(BaseAuthModel):
         }
 
 
-# ============================================================
-# MULTIMODAL FUSION
-# ============================================================
-
 class MultimodalFusion:
-    """
-    Combines scores from multiple biometric modalities.
-    
-    Fusion strategies:
-    1. Score-level: Average/weighted average of model scores
-    2. Decision-level: Majority vote of model decisions
-    3. Learned: Train a meta-classifier on model outputs
-    """
+    """Combines scores from multiple biometric modalities."""
     
     def __init__(self, strategy='weighted_average'):
         self.strategy = strategy
@@ -437,18 +338,10 @@ class MultimodalFusion:
     def set_weights(self, weights):
         """Set manual weights for weighted average fusion."""
         self.weights = np.array(weights)
-        self.weights = self.weights / self.weights.sum()  # Normalize
+        self.weights = self.weights / self.weights.sum()
     
     def fuse_scores(self, score_list):
-        """
-        Fuse scores from multiple models/modalities.
-        
-        Args:
-            score_list: List of score arrays, one per model
-                        Each array: shape (n_samples,)
-        Returns:
-            Fused scores: shape (n_samples,)
-        """
+        """Fuse scores from multiple models/modalities."""
         scores = np.column_stack(score_list)
         
         if self.strategy == 'average':
@@ -463,7 +356,7 @@ class MultimodalFusion:
             return np.max(scores, axis=1)
         
         elif self.strategy == 'min':
-            # Conservative: all modalities must agree
+
             return np.min(scores, axis=1)
         
         else:
@@ -489,15 +382,8 @@ class MultimodalFusion:
         return self.meta_model.predict(scores)
 
 
-# ============================================================
-# MODEL TRAINER: Orchestrates training across modalities
-# ============================================================
-
 class ModelTrainer:
-    """
-    Orchestrates training and evaluation of all models
-    across all biometric modalities.
-    """
+    """Orchestrates training and evaluation of all models across all biometric modalities."""
     
     def __init__(self):
         self.models = {}
@@ -573,7 +459,6 @@ class ModelTrainer:
             model.save(os.path.join(output_dir, f"{key}.pkl"))
         
         with open(os.path.join(output_dir, "results.json"), 'w') as f:
-            # Convert numpy types to Python types for JSON
             clean_results = {}
             for k, v in self.results.items():
                 clean_results[k] = {

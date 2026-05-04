@@ -1,19 +1,4 @@
-"""
-CMU Keystroke Dynamics Dataset Generator & Preprocessor
-========================================================
-Generates synthetic data that matches the CMU Benchmark format exactly.
-Password: ".tie5Roanl" (11 characters → 31 timing features)
-
-Features per keystroke (for characters: . t i e 5 R o a n l Return):
-- H.key    : Hold time (key down to key up) for each key
-- DD.key1.key2 : Down-Down time between consecutive keys  
-- UD.key1.key2 : Up-Down time between consecutive keys
-
-Real dataset: https://www.cs.cmu.edu/~keystroke/
-Kaggle mirror: https://www.kaggle.com/datasets/carnegiecylab/keystroke-dynamics-benchmark-data-set
-
-When you have the real dataset, replace the CSV path in keystroke_preprocessor.py
-"""
+"""CMU-format keystroke dynamics dataset generator."""
 
 import numpy as np
 import pandas as pd

@@ -1,37 +1,4 @@
-"""
-Adversarial Attacks Against Biometric Authentication
-=====================================================
-Implements attacks that fool trained biometric models:
-
-ATTACKS:
-1. FGSM (Fast Gradient Sign Method)
-   - Single-step gradient-based perturbation
-   - Fast but less effective
-   
-2. PGD (Projected Gradient Descent)
-   - Iterative FGSM with projection back to epsilon-ball
-   - Stronger attack, gold standard for robustness evaluation
-   
-3. Statistical Mimicry Attack
-   - Crafts samples matching target user's statistical profile
-   - More realistic: simulates an attacker who observed the target
-
-4. Noise Injection Attack
-   - Adds calibrated random noise to impostor samples
-   - Tests model robustness to input perturbation
-
-DEFENSES:
-1. Adversarial Training - Retrain with adversarial examples
-2. Input Smoothing - Gaussian smoothing of input features
-3. Feature Squeezing - Reduce feature precision
-4. Anomaly-Aware Thresholding - Dynamic threshold adjustment
-5. Ensemble Defense - Combine multiple model decisions
-
-Security Metrics:
-- Attack Success Rate (ASR): % of adversarial samples that fool the model
-- Perturbation Budget (ε): Maximum allowed distortion
-- Robustness Score: 1 - ASR under strongest attack
-"""
+"""Adversarial attack and defense implementations for biometric models."""
 
 import numpy as np
 import json
@@ -42,37 +9,12 @@ from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
 from copy import deepcopy
 
 
-# ============================================================
-# GRADIENT ESTIMATION FOR SKLEARN MODELS
-# ============================================================
-
 class GradientEstimator:
-    """
-    Estimate gradients for sklearn models that don't expose them.
-    
-    Since sklearn's RF and SVM don't provide gradients natively,
-    we use finite differences (numerical gradient estimation).
-    For MLP, we can also use the internal structure.
-    
-    This is a key concept: adversarial attacks fundamentally need
-    gradient information. When the model is a black box, we must
-    estimate gradients — this is the "black-box attack" scenario.
-    """
+    """Estimate gradients for sklearn models using finite differences."""
     
     @staticmethod
     def numerical_gradient(model_fn, X, epsilon=1e-4):
-        """
-        Compute numerical gradient using central finite differences.
-        
-        ∂f/∂x_i ≈ (f(x + εe_i) - f(x - εe_i)) / (2ε)
-        
-        Args:
-            model_fn: Function that returns scores (higher = more genuine)
-            X: Input samples (n_samples, n_features)
-            epsilon: Step size for finite differences
-        Returns:
-            gradients: (n_samples, n_features) gradient matrix
-        """
+        """Compute numerical gradient using central finite differences."""
         n_samples, n_features = X.shape
         gradients = np.zeros_like(X)
         
@@ -91,16 +33,10 @@ class GradientEstimator:
     
     @staticmethod
     def zoo_gradient(model_fn, X, epsilon=1e-3, n_queries=None):
-        """
-        Zeroth-Order Optimization gradient estimation.
-        Uses random direction sampling — more query-efficient for high-dim.
-        
-        This simulates a realistic black-box attack where the attacker
-        can only query the model API, not access internals.
-        """
+        """Zeroth-Order Optimization gradient estimation via random direction sampling."""
         n_samples, n_features = X.shape
         if n_queries is None:
-            n_queries = min(n_features, 20)  # Budget limit
+            n_queries = min(n_features, 20)
         
         gradients = np.zeros_like(X)
         
@@ -120,62 +56,25 @@ class GradientEstimator:
         return gradients
 
 
-# ============================================================
-# ATTACK 1: FGSM (Fast Gradient Sign Method)
-# ============================================================
-
 class FGSMAttack:
-    """
-    Fast Gradient Sign Method (Goodfellow et al., 2014)
-    
-    x_adv = x + ε · sign(∇_x L(x, y))
-    
-    The attacker adds a small perturbation in the direction that
-    maximizes the model's loss. The perturbation is bounded by ε.
-    
-    In biometric context: An impostor's typing/mouse data is slightly
-    modified to look more like the target user.
-    
-    Threat model: White-box (attacker knows model) or
-                  Black-box (using gradient estimation)
-    """
+    """Fast Gradient Sign Method (FGSM) adversarial attack."""
     
     def __init__(self, epsilon=0.1, targeted=True):
-        """
-        Args:
-            epsilon: Maximum perturbation magnitude (L∞ norm)
-            targeted: If True, push toward genuine class (evasion)
-                     If False, push away from genuine class (DoS)
-        """
         self.epsilon = epsilon
         self.targeted = targeted
         self.name = "FGSM"
     
     def attack(self, model_score_fn, X_impostor, gradient_method='numerical'):
-        """
-        Generate adversarial examples from impostor samples.
-        
-        Args:
-            model_score_fn: Function returning genuine probability scores
-            X_impostor: Impostor samples to perturb
-            gradient_method: 'numerical' or 'zoo'
-        
-        Returns:
-            X_adversarial: Perturbed samples
-            perturbation: The added noise
-        """
+        """Generate adversarial examples from impostor samples."""
         # Estimate gradient
         if gradient_method == 'zoo':
             gradients = GradientEstimator.zoo_gradient(model_score_fn, X_impostor)
         else:
             gradients = GradientEstimator.numerical_gradient(model_score_fn, X_impostor)
         
-        # FGSM: perturb in direction of gradient sign
         if self.targeted:
-            # Move TOWARD genuine class (increase score)
             perturbation = self.epsilon * np.sign(gradients)
         else:
-            # Move AWAY from genuine class (decrease score)  
             perturbation = -self.epsilon * np.sign(gradients)
         
         X_adversarial = X_impostor + perturbation
@@ -184,17 +83,13 @@ class FGSMAttack:
     
     def evaluate_attack(self, model_predict_fn, model_score_fn, X_impostor, X_adversarial):
         """Evaluate attack effectiveness."""
-        # Original predictions on impostor data
         orig_pred = model_predict_fn(X_impostor)
         orig_scores = model_score_fn(X_impostor)
-        
-        # Predictions on adversarial data
         adv_pred = model_predict_fn(X_adversarial)
         adv_scores = model_score_fn(X_adversarial)
         
-        # Attack Success Rate: % of impostors now classified as genuine
-        n_originally_rejected = np.sum(orig_pred == 0)  # Correctly rejected
-        n_now_accepted = np.sum((orig_pred == 0) & (adv_pred == 1))  # Now fooled
+        n_originally_rejected = np.sum(orig_pred == 0)
+        n_now_accepted = np.sum((orig_pred == 0) & (adv_pred == 1))
         
         asr = n_now_accepted / max(n_originally_rejected, 1)
         
@@ -218,34 +113,10 @@ class FGSMAttack:
         }
 
 
-# ============================================================
-# ATTACK 2: PGD (Projected Gradient Descent)
-# ============================================================
-
 class PGDAttack:
-    """
-    Projected Gradient Descent (Madry et al., 2018)
-    
-    Iterative version of FGSM:
-    x^(t+1) = Π_{x+S}( x^(t) + α · sign(∇_x L(x^(t), y)) )
-    
-    Where Π projects back onto the ε-ball around original x.
-    
-    Stronger than FGSM because it takes multiple smaller steps,
-    finding better adversarial examples within the budget.
-    
-    In biometric context: The attacker iteratively refines the
-    perturbation, getting closer to fooling the model each step.
-    """
+    """Projected Gradient Descent (PGD) iterative adversarial attack."""
     
     def __init__(self, epsilon=0.1, alpha=0.01, n_iterations=40, random_start=True):
-        """
-        Args:
-            epsilon: Maximum perturbation (L∞ ball radius)
-            alpha: Step size per iteration
-            n_iterations: Number of PGD steps
-            random_start: Start from random point in ε-ball
-        """
         self.epsilon = epsilon
         self.alpha = alpha
         self.n_iterations = n_iterations
@@ -254,16 +125,9 @@ class PGDAttack:
         self.attack_history = []
     
     def attack(self, model_score_fn, X_impostor, gradient_method='numerical'):
-        """
-        Generate adversarial examples using iterative PGD.
-        
-        Returns:
-            X_adversarial: Best adversarial examples found
-            perturbation: Total perturbation applied
-        """
+        """Generate adversarial examples using iterative PGD."""
         X_orig = X_impostor.copy()
         
-        # Random initialization within ε-ball
         if self.random_start:
             X_adv = X_orig + np.random.uniform(
                 -self.epsilon, self.epsilon, X_orig.shape
@@ -283,14 +147,9 @@ class PGDAttack:
             else:
                 gradients = GradientEstimator.numerical_gradient(model_score_fn, X_adv)
             
-            # Gradient ascent step (move toward genuine class)
             X_adv = X_adv + self.alpha * np.sign(gradients)
-            
-            # Project back onto ε-ball (L∞ projection)
             perturbation = np.clip(X_adv - X_orig, -self.epsilon, self.epsilon)
             X_adv = X_orig + perturbation
-            
-            # Track best adversarial examples
             current_scores = model_score_fn(X_adv)
             improved = current_scores > best_scores
             best_X_adv[improved] = X_adv[improved]
@@ -320,44 +179,15 @@ class PGDAttack:
         return result
 
 
-# ============================================================
-# ATTACK 3: STATISTICAL MIMICRY
-# ============================================================
-
 class StatisticalMimicryAttack:
-    """
-    Statistical Mimicry Attack
-    
-    A more realistic attack where the adversary has observed
-    the target user's behavioral statistics (e.g., through
-    shoulder surfing, data breach, or side-channel).
-    
-    The attacker generates synthetic samples that match the
-    target user's mean and standard deviation for each feature.
-    
-    Threat model: The attacker knows the target's typing/mouse
-    statistics but cannot perfectly replicate them.
-    """
+    """Statistical mimicry attack that generates samples matching the target user's profile."""
     
     def __init__(self, noise_level=0.1):
-        """
-        Args:
-            noise_level: How much random variation to add (0=perfect copy)
-        """
         self.noise_level = noise_level
         self.name = f"Mimicry-{noise_level}"
     
     def attack(self, X_genuine_reference, n_samples=50):
-        """
-        Generate synthetic samples mimicking the target user.
-        
-        Args:
-            X_genuine_reference: Genuine user's enrollment data
-            n_samples: Number of fake samples to generate
-        
-        Returns:
-            X_mimicry: Synthetic impostor samples
-        """
+        """Generate synthetic samples mimicking the target user's statistical profile."""
         mean = np.mean(X_genuine_reference, axis=0)
         std = np.std(X_genuine_reference, axis=0)
         
@@ -387,10 +217,6 @@ class StatisticalMimicryAttack:
             "noise_level": self.noise_level,
         }
 
-
-# ============================================================
-# ATTACK 4: NOISE INJECTION
-# ============================================================
 
 class NoiseInjectionAttack:
     """
@@ -423,47 +249,20 @@ class NoiseInjectionAttack:
         }
 
 
-# ============================================================
-# DEFENSE MECHANISMS
-# ============================================================
-
 class AdversarialDefense:
     """Collection of defense mechanisms against adversarial attacks."""
     
     @staticmethod
     def adversarial_training(model_class, model_params, X_train, y_train,
                              attack_fn, n_augment_ratio=0.3):
-        """
-        Defense 1: Adversarial Training
-        
-        Augment training data with adversarial examples and retrain.
-        The model learns to be robust against known attack patterns.
-        
-        Args:
-            model_class: sklearn model class
-            model_params: Model constructor parameters
-            X_train, y_train: Original training data
-            attack_fn: Function that generates adversarial samples
-            n_augment_ratio: Fraction of adversarial samples to add
-        
-        Returns:
-            Retrained model
-        """
-        # Generate adversarial versions of genuine training samples
+        """Augment training data with adversarial examples and retrain the model."""
         genuine_mask = y_train == 1
         X_genuine = X_train[genuine_mask]
-        
         n_adv = int(len(X_genuine) * n_augment_ratio)
         X_adv_subset = X_genuine[:n_adv]
-        
-        # Apply attack to create adversarial examples
         X_adv, _ = attack_fn(X_adv_subset)
-        
-        # Augmented training set: original + adversarial (labeled as impostor)
         X_augmented = np.vstack([X_train, X_adv])
         y_augmented = np.concatenate([y_train, np.zeros(len(X_adv))])
-        
-        # Retrain model
         model = model_class(**model_params)
         model.fit(X_augmented, y_augmented)
         
@@ -475,88 +274,41 @@ class AdversarialDefense:
     
     @staticmethod
     def input_smoothing(X, sigma=0.5):
-        """
-        Defense 2: Input Smoothing
-        
-        Apply Gaussian smoothing to input features before classification.
-        Removes high-frequency adversarial perturbations while preserving
-        the genuine behavioral signal.
-        
-        In biometric context: Smooth out suspicious micro-variations
-        in typing timing or mouse trajectory.
-        """
+        """Apply input smoothing to reduce adversarial perturbations."""
         noise = np.random.normal(0, sigma, X.shape)
-        # Average with neighbors (simple moving average per feature)
-        # For independent features, this acts as a low-pass filter
         X_smoothed = X + noise
-        # Average original and noisy version (denoising)
         X_smoothed = (X + X_smoothed) / 2
         return X_smoothed
     
     @staticmethod
     def feature_squeezing(X, n_bits=4):
-        """
-        Defense 3: Feature Squeezing
-        
-        Reduce the precision of input features.
-        Adversarial perturbations often exploit fine-grained precision.
-        
-        Quantize features to fewer bits, eliminating small perturbations.
-        """
-        # Compute range per feature
+        """Reduce feature precision to eliminate small adversarial perturbations."""
         X_min = X.min(axis=0)
         X_max = X.max(axis=0)
         X_range = X_max - X_min + 1e-8
-        
-        # Normalize to [0, 1]
         X_norm = (X - X_min) / X_range
-        
-        # Quantize
         n_levels = 2 ** n_bits
         X_quantized = np.round(X_norm * n_levels) / n_levels
-        
-        # Restore original scale
         X_squeezed = X_quantized * X_range + X_min
         
         return X_squeezed
     
     @staticmethod
-    def anomaly_threshold_adjustment(base_scores, genuine_scores, 
+    def anomaly_threshold_adjustment(base_scores, genuine_scores,
                                       confidence=0.99):
-        """
-        Defense 4: Anomaly-Aware Dynamic Thresholding
-        
-        Instead of fixed threshold, use adaptive threshold based on
-        the distribution of genuine scores during enrollment.
-        
-        Tighter threshold = more false rejections but harder to fool.
-        """
+        """Compute an adaptive threshold from the genuine score distribution."""
         mean_score = np.mean(genuine_scores)
         std_score = np.std(genuine_scores)
-        
-        # Set threshold at confidence interval boundary
         from scipy.stats import norm
         z = norm.ppf(1 - (1 - confidence) / 2)
         strict_threshold = mean_score - z * std_score
-        
-        # Apply to base scores
         adjusted_predictions = (base_scores >= strict_threshold).astype(int)
         
         return adjusted_predictions, strict_threshold
     
     @staticmethod
     def ensemble_defense(models, X, strategy='unanimous'):
-        """
-        Defense 5: Ensemble Defense
-        
-        Require agreement from multiple models/modalities.
-        An adversarial example that fools one model may not fool others.
-        
-        Strategies:
-        - 'majority': >50% must agree
-        - 'unanimous': ALL must agree (strictest)
-        - 'any': At least one accepts (most permissive)
-        """
+        """Combine predictions from multiple models using the given strategy."""
         predictions = []
         for model in models:
             pred = model.predict(X)
@@ -574,15 +326,8 @@ class AdversarialDefense:
             return (preds.mean(axis=1) >= 0.5).astype(int)
 
 
-# ============================================================
-# ATTACK ORCHESTRATOR
-# ============================================================
-
 class AttackOrchestrator:
-    """
-    Orchestrates attacks and defenses, producing comprehensive
-    security evaluation results.
-    """
+    """Orchestrates attacks and defenses across models."""
     
     def __init__(self):
         self.attack_results = []

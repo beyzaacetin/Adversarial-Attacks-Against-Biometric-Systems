@@ -1,12 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-// ============================================================
-// BIOMETRIC AUTH DEMO — Self-contained React component
-// Captures real keystrokes & mouse, runs local ML scoring,
-// simulates adversarial attacks, and shows defense mechanisms
-// ============================================================
-
-// --- Inline ML: lightweight One-Class scoring ---
 function gaussianScore(sample, mean, std) {
   let logProb = 0;
   for (let i = 0; i < sample.length; i++) {
@@ -27,7 +20,6 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(magA) * Math.sqrt(magB) + 1e-8);
 }
 
-// --- Feature extraction from raw browser events ---
 function extractKeystrokeFeatures(events) {
   if (events.length < 3) return null;
   const holds = [], dds = [], uds = [];
@@ -88,7 +80,6 @@ function extractMouseFeatures(trail) {
   ];
 }
 
-// --- FGSM Attack Simulation (local) ---
 function fgsmAttack(sample, mean, std, epsilon) {
   const grad = sample.map((v, i) => {
     const s = std[i] || 0.001;
@@ -120,12 +111,8 @@ function mimicryAttack(mean, std, noise) {
   return mean.map((m, i) => m + (std[i] || 0.001) * (1 + noise) * (Math.random() * 2 - 1));
 }
 
-// ============================================================
-// MAIN COMPONENT
-// ============================================================
 export default function BiometricAuthDemo() {
-  // --- State ---
-  const [phase, setPhase] = useState("enroll"); // enroll | auth | attack
+  const [phase, setPhase] = useState("enroll");
   const [enrollSamples, setEnrollSamples] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
   const [text, setText] = useState("");
@@ -305,9 +292,6 @@ export default function BiometricAuthDemo() {
     setAttackResults((p) => [result, ...p].slice(0, 15));
   };
 
-  // ============================================================
-  // RENDER
-  // ============================================================
   const tabStyle = (t) => ({
     padding: "10px 20px", cursor: "pointer", fontWeight: 500, fontSize: 14,
     borderBottom: phase === t ? "2px solid #1D9E75" : "2px solid transparent",

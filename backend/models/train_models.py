@@ -1,12 +1,4 @@
-"""
-Model Training Runner
-======================
-Trains all authentication models across all biometric modalities
-and produces comprehensive evaluation results.
-
-Usage:
-    python train_models.py
-"""
+"""Trains all authentication models across biometric modalities."""
 
 import sys
 import os

@@ -1,21 +1,4 @@
-"""
-FastAPI Backend — Biometric Authentication Demo
-=================================================
-Endpoints:
-  POST /api/enroll          — Enroll a new user (collect baseline)
-  POST /api/authenticate    — Authenticate typing/mouse sample
-  POST /api/attack/fgsm     — Run FGSM attack on a sample
-  POST /api/attack/pgd      — Run PGD attack on a sample
-  POST /api/attack/mimicry  — Run statistical mimicry attack
-  POST /api/defense/toggle  — Enable/disable defense mechanisms
-  GET  /api/stats           — Get model performance stats
-  GET  /api/users           — List enrolled users
-
-To run:
-  pip install fastapi uvicorn scikit-learn numpy
-  cd backend/app
-  uvicorn main:app --reload --port 8000
-"""
+"""FastAPI backend for biometric authentication demo."""
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,10 +20,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import OneClassSVM
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 
-# ============================================================
-# APP SETUP
-# ============================================================
-
 app = FastAPI(
     title="Biometric Authentication API",
     description="Continuous authentication using behavioral biometrics with adversarial attack simulation",
@@ -55,10 +34,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================================================
-# IN-MEMORY STATE
-# ============================================================
-
 class AppState:
     """Holds enrolled users, models, and settings."""
     def __init__(self):
@@ -70,20 +45,14 @@ class AppState:
 
 state = AppState()
 
-# ============================================================
-# PYDANTIC MODELS
-# ============================================================
-
 class KeystrokeData(BaseModel):
-    """Raw keystroke timing data from the frontend."""
     user_id: str
-    keystrokes: List[dict]  # [{key, downTime, upTime}, ...]
+    keystrokes: List[dict]
     text: str
 
 class MouseData(BaseModel):
-    """Raw mouse movement data from the frontend."""
     user_id: str
-    movements: List[dict]  # [{x, y, timestamp, event_type}, ...]
+    movements: List[dict]
 
 class EnrollRequest(BaseModel):
     user_id: str
@@ -97,48 +66,36 @@ class AuthRequest(BaseModel):
 
 class AttackRequest(BaseModel):
     user_id: str
-    attack_type: str  # "fgsm", "pgd", "mimicry"
+    attack_type: str
     epsilon: Optional[float] = 0.2
     n_iterations: Optional[int] = 20
     noise_level: Optional[float] = 0.1
 
-# ============================================================
-# FEATURE EXTRACTION (from raw browser events)
-# ============================================================
-
 def extract_keystroke_features(keystrokes: List[dict]) -> List[float]:
-    """
-    Extract timing features from raw keystroke events.
-    Mirrors the CMU dataset feature format.
-    """
+    """Extract timing features from raw keystroke events."""
     if len(keystrokes) < 2:
         return [0.0] * 20
     
     features = []
     
-    # Hold times (key down to key up for each key)
     hold_times = []
     for ks in keystrokes:
         if "downTime" in ks and "upTime" in ks:
-            hold = (ks["upTime"] - ks["downTime"]) / 1000.0  # Convert ms to sec
+            hold = (ks["upTime"] - ks["downTime"]) / 1000.0
             hold_times.append(max(0.001, hold))
     
-    # Down-Down times (time between consecutive key presses)
     dd_times = []
     for i in range(1, len(keystrokes)):
         if "downTime" in keystrokes[i] and "downTime" in keystrokes[i-1]:
             dd = (keystrokes[i]["downTime"] - keystrokes[i-1]["downTime"]) / 1000.0
             dd_times.append(max(0.001, dd))
     
-    # Up-Down times (key release to next key press)
     ud_times = []
     for i in range(1, len(keystrokes)):
         if "upTime" in keystrokes[i-1] and "downTime" in keystrokes[i]:
             ud = (keystrokes[i]["downTime"] - keystrokes[i-1]["upTime"]) / 1000.0
-            ud_times.append(ud)  # Can be negative (overlapping keys)
+            ud_times.append(ud)
     
-    # Build feature vector
-    # Raw timing features (pad/truncate to fixed size)
     for times in [hold_times, dd_times, ud_times]:
         if len(times) >= 5:
             features.extend(times[:5])
@@ -206,9 +163,7 @@ def extract_mouse_features(movements: List[dict]) -> List[float]:
     displacement = np.sqrt((xs[-1]-xs[0])**2 + (ys[-1]-ys[0])**2)
     features.append(total_dist)
     features.append(displacement)
-    features.append(displacement / (total_dist + 1e-6))  # Path efficiency
-    
-    # Click features (if present)
+    features.append(displacement / (total_dist + 1e-6))
     clicks = [m for m in movements if m.get("event_type") == "click"]
     features.append(len(clicks))
     
@@ -224,10 +179,6 @@ def extract_mouse_features(movements: List[dict]) -> List[float]:
     features.append(np.std(curvatures) if len(curvatures) > 1 else 0)
     
     return features[:15]
-
-# ============================================================
-# API ENDPOINTS
-# ============================================================
 
 @app.get("/")
 def root():
@@ -253,29 +204,21 @@ def enroll_user(req: EnrollRequest):
         raise HTTPException(400, "Need at least 3 keystroke samples for enrollment")
     
     X = np.array(req.keystroke_samples)
-    
-    # Fit scaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    
-    # Train One-Class SVM (anomaly detection — genuine only)
     ocsvm = OneClassSVM(kernel='rbf', nu=0.15, gamma='scale')
     ocsvm.fit(X_scaled)
     
-    # Train RF if we have enough samples for binary approach
     rf = None
     if len(req.keystroke_samples) >= 10:
-        # Create synthetic impostors by adding noise
         n_imp = len(X)
         X_imp = X + np.random.normal(0, np.std(X, axis=0) * 2, (n_imp, X.shape[1]))
         X_combined = np.vstack([X, X_imp])
         y_combined = np.concatenate([np.ones(len(X)), np.zeros(n_imp)])
         X_combined_scaled = scaler.transform(X_combined)
-        
         rf = RandomForestClassifier(n_estimators=50, max_depth=8, random_state=42)
         rf.fit(X_combined_scaled, y_combined)
     
-    # Store
     state.enrolled_users[req.user_id] = {
         "n_samples": len(req.keystroke_samples),
         "modalities": ["keystroke"],
@@ -331,10 +274,8 @@ def authenticate(req: AuthRequest):
             "confidence": abs(proba - 0.5) * 2,
         }
     
-    # Ensemble decision
     scores = [r["score"] for r in results.values()]
     avg_score = np.mean(scores) if scores else 0
-    
     threshold = 0.5
     is_genuine = avg_score > threshold
     
@@ -524,10 +465,6 @@ def extract_mouse(data: MouseData):
         "n_events": len(data.movements),
     }
 
-
-# ============================================================
-# STARTUP: Pre-seed with demo user
-# ============================================================
 
 @app.on_event("startup")
 def seed_demo_data():

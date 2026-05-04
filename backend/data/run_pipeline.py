@@ -1,9 +1,4 @@
-"""
-Master Data Pipeline
-=====================
-Runs all three preprocessing pipelines and generates summary statistics.
-This is the entry point for data preparation.
-"""
+"""Master data pipeline runner for all biometric preprocessing steps."""
 
 import os
 import sys

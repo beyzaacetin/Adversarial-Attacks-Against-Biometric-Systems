@@ -1,16 +1,4 @@
-"""
-Keystroke Dynamics Preprocessor
-================================
-Takes raw CMU-format keystroke data and prepares it for ML models.
-
-Pipeline:
-1. Load raw CSV (CMU format or our generated data)
-2. Feature extraction (timing features are already extracted in CMU)
-3. Add derived features: typing speed, rhythm consistency
-4. Normalize features (z-score per subject for authentication)
-5. Create genuine/impostor pairs for training
-6. Train/test split (first 200 reps train, last 200 test - CMU standard)
-"""
+"""Keystroke dynamics preprocessor for CMU-format data."""
 
 import numpy as np
 import pandas as pd
@@ -44,35 +32,21 @@ class KeystrokePreprocessor:
         return self.df
     
     def extract_derived_features(self):
-        """
-        Add derived features beyond raw timing data.
-        These capture higher-level typing behavior.
-        """
+        """Add derived features beyond raw timing data."""
         df = self.df.copy()
         
-        # 1. Average hold time (overall typing pressure)
         hold_cols = [c for c in self.feature_cols if c.startswith("H.")]
         df["avg_hold_time"] = df[hold_cols].mean(axis=1)
         df["std_hold_time"] = df[hold_cols].std(axis=1)
-        
-        # 2. Average down-down time (typing speed)
         dd_cols = [c for c in self.feature_cols if c.startswith("DD.")]
         df["avg_dd_time"] = df[dd_cols].mean(axis=1)
         df["std_dd_time"] = df[dd_cols].std(axis=1)
-        
-        # 3. Average up-down time (flight time / finger transition)
         ud_cols = [c for c in self.feature_cols if c.startswith("UD.")]
         df["avg_ud_time"] = df[ud_cols].mean(axis=1)
         df["std_ud_time"] = df[ud_cols].std(axis=1)
-        
-        # 4. Typing speed (characters per second estimate)
         total_time = df[dd_cols].sum(axis=1)
-        df["typing_speed"] = 11.0 / total_time  # 11 chars in password
-        
-        # 5. Rhythm consistency (coefficient of variation of DD times)
+        df["typing_speed"] = 11.0 / total_time
         df["rhythm_cv"] = df["std_dd_time"] / (df["avg_dd_time"] + 1e-8)
-        
-        # 6. Overlap ratio (how many UD times are negative = keys overlap)
         df["overlap_ratio"] = (df[ud_cols] < 0).sum(axis=1) / len(ud_cols)
         
         # Update feature columns
@@ -85,13 +59,9 @@ class KeystrokePreprocessor:
         return df
     
     def compute_user_statistics(self):
-        """
-        Compute per-user statistics for anomaly-based authentication.
-        This is used as the 'enrolled profile' for each user.
-        """
+        """Compute per-user statistics for anomaly-based authentication."""
         for subject in self.df["subject"].unique():
             user_data = self.df[self.df["subject"] == subject]
-            # Use first 200 samples (sessions 1-4) as enrollment
             enrollment = user_data[user_data["sessionIndex"] <= 4]
             
             self.user_stats[subject] = {
@@ -105,34 +75,18 @@ class KeystrokePreprocessor:
         return self.user_stats
     
     def create_authentication_dataset(self, target_subject, n_impostors=5):
-        """
-        Create binary classification dataset for a target user.
-        
-        Args:
-            target_subject: The genuine user (e.g., 's001')
-            n_impostors: Number of impostor subjects to include
-            
-        Returns:
-            X_train, X_test, y_train, y_test
-        """
-        # Genuine samples
+        """Create binary classification dataset for a target user."""
         genuine = self.df[self.df["subject"] == target_subject].copy()
-        genuine["label"] = 1  # Genuine = 1
-        
-        # Split: sessions 1-4 train, sessions 5-8 test
+        genuine["label"] = 1
         genuine_train = genuine[genuine["sessionIndex"] <= 4]
         genuine_test = genuine[genuine["sessionIndex"] > 4]
         
-        # Impostor samples (randomly select other users)
         other_subjects = [s for s in self.df["subject"].unique() if s != target_subject]
-        impostor_subjects = np.random.choice(other_subjects, 
+        impostor_subjects = np.random.choice(other_subjects,
                                              min(n_impostors, len(other_subjects)),
                                              replace=False)
-        
         impostor_data = self.df[self.df["subject"].isin(impostor_subjects)].copy()
-        impostor_data["label"] = 0  # Impostor = 0
-        
-        # Use 5 random samples per impostor for testing (simulating real attack)
+        impostor_data["label"] = 0
         impostor_test_samples = []
         for imp_subj in impostor_subjects:
             imp_data = impostor_data[impostor_data["subject"] == imp_subj]
@@ -140,13 +94,9 @@ class KeystrokePreprocessor:
             impostor_test_samples.append(samples)
         
         impostor_test = pd.concat(impostor_test_samples) if impostor_test_samples else pd.DataFrame()
-        
-        # For training, use some impostor samples
         impostor_train = impostor_data[~impostor_data.index.isin(impostor_test.index)]
-        impostor_train = impostor_train.sample(min(len(genuine_train), len(impostor_train)), 
+        impostor_train = impostor_train.sample(min(len(genuine_train), len(impostor_train)),
                                                random_state=42)
-        
-        # Combine
         train_df = pd.concat([genuine_train, impostor_train])
         test_df = pd.concat([genuine_test, impostor_test])
         
@@ -167,24 +117,12 @@ class KeystrokePreprocessor:
         return X_train, X_test, y_train, y_test
     
     def create_anomaly_detection_dataset(self, target_subject):
-        """
-        Create one-class dataset (only genuine samples for training).
-        Used for anomaly detection approaches (One-Class SVM, Autoencoder).
-        
-        Returns:
-            X_train (genuine only), X_test_genuine, X_test_impostor
-        """
+        """Create one-class dataset with genuine-only training samples."""
         genuine = self.df[self.df["subject"] == target_subject]
-        
-        # Train: sessions 1-4 (genuine only)
         train_data = genuine[genuine["sessionIndex"] <= 4]
         X_train = train_data[self.feature_cols].values
-        
-        # Test genuine: sessions 5-8
         test_genuine = genuine[genuine["sessionIndex"] > 4]
         X_test_genuine = test_genuine[self.feature_cols].values
-        
-        # Test impostor: random samples from other users
         other = self.df[self.df["subject"] != target_subject]
         impostor_samples = other.groupby("subject").apply(
             lambda x: x.sample(min(5, len(x)), random_state=42)
@@ -205,19 +143,12 @@ class KeystrokePreprocessor:
         return X_train, X_test_genuine, X_test_impostor
     
     def create_sequence_dataset(self, target_subject, seq_length=10):
-        """
-        Create sequential dataset for LSTM-based models.
-        Groups consecutive typing samples into sequences.
-        
-        Returns:
-            X_train_seq, X_test_seq, y_train, y_test
-        """
+        """Create sequential dataset for LSTM-based models."""
         X_train, X_test, y_train, y_test = self.create_authentication_dataset(
             target_subject, n_impostors=5
         )
         
         def make_sequences(X, y, seq_len):
-            """Group samples into overlapping sequences."""
             sequences = []
             labels = []
             for i in range(len(X) - seq_len + 1):
@@ -264,9 +195,6 @@ class KeystrokePreprocessor:
         print(f"Processed data saved to {output_dir}")
 
 
-# ============================================================
-# MAIN: Run the full preprocessing pipeline
-# ============================================================
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(BASE_DIR, "../../datasets/keystroke")

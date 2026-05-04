@@ -1,22 +1,4 @@
-"""
-Mouse Dynamics Dataset Generator & Preprocessor
-=================================================
-Generates synthetic data matching Balabit Mouse Dynamics Challenge format.
-Real dataset: https://github.com/balabit/Mouse-Dynamics-Challenge
-
-Balabit format per session file:
-- timestamp: elapsed time
-- x, y: cursor position  
-- state: Move, Drag, Released, Pressed
-- button: NoButton, Left, Right, Scroll
-
-Features extracted:
-- Movement speed, acceleration, jerk
-- Curvature, angular velocity
-- Click patterns, drag patterns
-- Direction histogram
-- Pause patterns
-"""
+"""Mouse dynamics dataset generator and preprocessor."""
 
 import numpy as np
 import pandas as pd
@@ -24,10 +6,6 @@ import os
 from collections import defaultdict
 
 np.random.seed(42)
-
-# ============================================================
-# DATA GENERATOR (simulates Balabit format)
-# ============================================================
 
 class MouseDataGenerator:
     """Generate synthetic mouse movement data in Balabit format."""
@@ -182,10 +160,6 @@ class MouseDataGenerator:
         
         return output_dir
 
-
-# ============================================================
-# FEATURE EXTRACTOR
-# ============================================================
 
 class MouseFeatureExtractor:
     """Extract behavioral features from raw mouse movement data."""
@@ -357,10 +331,6 @@ class MouseFeatureExtractor:
         return pd.DataFrame(all_features)
 
 
-# ============================================================
-# MOUSE PREPROCESSOR
-# ============================================================
-
 class MousePreprocessor:
     """Full preprocessing pipeline for mouse dynamics data."""
     
@@ -459,10 +429,6 @@ class MousePreprocessor:
         test_df.to_csv(os.path.join(output_dir, "mouse_test_features.csv"), index=False)
         print(f"✓ Saved to {output_dir}")
 
-
-# ============================================================
-# MAIN
-# ============================================================
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
