@@ -5,13 +5,12 @@ import json
 import os
 import pickle
 from sklearn.svm import OneClassSVM
-from sklearn.ensemble import RandomForestClassifier, IsolationForest
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier, MLPRegressor
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
-    roc_auc_score, roc_curve, confusion_matrix, classification_report
+    roc_auc_score, roc_curve, confusion_matrix
 )
-from sklearn.preprocessing import StandardScaler
 
 
 class BaseAuthModel:
@@ -356,7 +355,6 @@ class MultimodalFusion:
             return np.max(scores, axis=1)
         
         elif self.strategy == 'min':
-
             return np.min(scores, axis=1)
         
         else:
