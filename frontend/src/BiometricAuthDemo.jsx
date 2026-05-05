@@ -305,6 +305,7 @@ export default function BiometricAuthDemo() {
     setAttackResults((p) => [result, ...p].slice(0, 15));
   };
 
+  const tabStyle = (t) => ({
     color: phase === t ? "#1D9E75" : "#888",
     background: "none", border: "none", borderBottom: phase === t ? "2px solid #1D9E75" : "2px solid transparent",
   });
