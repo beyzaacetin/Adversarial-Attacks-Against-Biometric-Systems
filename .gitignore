@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.pkl
+*.joblib
+node_modules/
+frontend/build/
+.DS_Store
+*.log
