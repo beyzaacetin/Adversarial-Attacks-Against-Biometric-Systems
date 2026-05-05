@@ -177,12 +177,5 @@ MLPAuth — sinir ağı
 AutoencoderAuth — reconstruction-error ile anomali tespiti
 MultimodalFusion — 3 biyometrik modaliteyi birleştiren füzyon katmanı
 Her modelde predict() ve predict_score() → kimlik doğrulama kararı buradan çıkıyor
-Sunum sırası için önerim:
 
-Dosya	Sunumda ne söylersin
-## auth_models.py	"Kimlik doğrulama algoritmaları burada — OneClassSVM, RandomForest, MLP, Autoencoder ve füzyon katmanı"
-## adversarial.py	"Adversarial saldırılar burada — FGSM, PGD, Mimicry, Noise Injection"
-## main.py	"REST API — frontend/backend köprüsü, enroll/authenticate endpoint'leri"
-Kısaca: Hocaya "core algoritma" olarak auth_models.py göster, "adversarial attack" olarak adversarial.py göster. main.py sadece API katmanı.
 
-Claude Sonnet 4.6 • 1x
