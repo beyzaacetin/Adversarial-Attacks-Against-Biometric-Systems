@@ -566,6 +566,26 @@ export default function BiometricAuthDemo() {
               ))}
             </div>
 
+            {/* Attack description */}
+            {attackType === "fgsm" && (
+              <div style={{ background: "#F0F4FF", border: "1px solid #C7D4F5", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#334" }}>
+                <strong>FGSM — Fast Gradient Sign Method</strong><br />
+                Computes the gradient of the authentication score with respect to the input features and shifts every feature by exactly ε in the direction that maximises the score — all in a <em>single step</em>. When you click <em>Launch</em>, the system generates a synthetic impostor sample, runs FGSM on it, and reports whether the perturbed features cross the acceptance threshold.
+              </div>
+            )}
+            {attackType === "pgd" && (
+              <div style={{ background: "#F0F4FF", border: "1px solid #C7D4F5", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#334" }}>
+                <strong>PGD — Projected Gradient Descent</strong><br />
+                Iteratively applies small FGSM steps, projecting back into the ε-ball after each step. More iterations = stronger attack. When you click <em>Launch</em>, you will see a score trajectory chart showing how the authentication score rises with each iteration.
+              </div>
+            )}
+            {attackType === "mimicry" && (
+              <div style={{ background: "#F0F4FF", border: "1px solid #C7D4F5", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#334" }}>
+                <strong>Mimicry — Statistical Profile Copy</strong><br />
+                Assumes the attacker knows the enrolled user's biometric mean and std, and samples directly from that distribution with added noise. Noise = 0 is a perfect statistical copy; higher noise makes it noisier and easier to detect. When you click <em>Launch</em>, the system checks whether this copy passes the Gaussian score threshold.
+              </div>
+            )}
+
             {}
             {(attackType === "fgsm" || attackType === "pgd") && (
               <div style={{ marginBottom: 12 }}>
@@ -601,22 +621,32 @@ export default function BiometricAuthDemo() {
             {}
             <div style={{ borderTop: "1px solid #e0e0e0", marginTop: 12, paddingTop: 12, marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: "#444", marginBottom: 8 }}>Active Defenses</div>
-              <div style={{ display: "flex", gap: 16 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                  <input type="checkbox" checked={defenseSmoothing}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input type="checkbox" checked={defenseSmoothing} style={{ marginTop: 2 }}
                     onChange={(e) => setDefenseSmoothing(e.target.checked)} />
-                  <span>Input Smoothing</span>
-                  <span style={{ fontSize: 11, color: "#999" }}>(σ=0.3)</span>
+                  <div>
+                    <span style={{ fontWeight: 500 }}>Input Smoothing</span>
+                    <span style={{ fontSize: 11, color: "#999", marginLeft: 4 }}>(σ=0.3)</span>
+                    <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                      Adds Gaussian noise (±0.3) to each feature and averages it with the original value. This blurs the precise perturbations that gradient-based attacks depend on, pushing the adversarial score back below the threshold.
+                    </div>
+                  </div>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                  <input type="checkbox" checked={defenseSqueezing}
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input type="checkbox" checked={defenseSqueezing} style={{ marginTop: 2 }}
                     onChange={(e) => setDefenseSqueezing(e.target.checked)} />
-                  <span>Feature Squeezing</span>
-                  <span style={{ fontSize: 11, color: "#999" }}>(4-bit)</span>
+                  <div>
+                    <span style={{ fontWeight: 500 }}>Feature Squeezing</span>
+                    <span style={{ fontSize: 11, color: "#999", marginLeft: 4 }}>(4-bit)</span>
+                    <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                      Quantizes every feature to only 16 discrete levels (2⁴ = 4-bit). Adversarial attacks rely on fine-grained values; rounding destroys those small tweaks and forces the score down, blocking even a successful mimicry attempt.
+                    </div>
+                  </div>
                 </label>
               </div>
               {(defenseSmoothing || defenseSqueezing) && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#0F6E56", background: "#E1F5EE", borderRadius: 6, padding: "4px 8px" }}>
+                <div style={{ marginTop: 8, fontSize: 12, color: "#0F6E56", background: "#E1F5EE", borderRadius: 6, padding: "4px 8px" }}>
                   Defense active — adversarial features will be sanitized before scoring
                 </div>
               )}
