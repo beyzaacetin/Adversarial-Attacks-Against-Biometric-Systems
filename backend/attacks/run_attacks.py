@@ -1,6 +1,4 @@
-"""Runs all adversarial attacks against trained biometric models."""
-
-import sys
+﻿import sys
 import os
 import json
 import time
@@ -19,14 +17,11 @@ from auth_models import OneClassSVMAuth, RandomForestAuth, MLPAuth, AutoencoderA
 from keystroke_preprocessor import KeystrokePreprocessor
 from touch_preprocessor import TouchPreprocessor, TouchDataGenerator
 
-
 def run_keystroke_attacks():
-    """Run adversarial attacks on keystroke authentication models."""
     print("\n" + "=" * 60)
     print("  ADVERSARIAL ATTACKS ON KEYSTROKE AUTHENTICATION")
     print("=" * 60)
     
-    # Load and prepare data
     DATA_DIR = os.path.join(BASE_DIR, "../../datasets/keystroke")
     csv_path = os.path.join(DATA_DIR, "DSL-StrongPasswordData.csv")
     
@@ -42,7 +37,6 @@ def run_keystroke_attacks():
     orchestrator = AttackOrchestrator()
     all_results = {}
     
-    # Test attacks on each model type
     models_to_test = {
         "Random Forest": RandomForestAuth(n_estimators=100, max_depth=10),
         "MLP Neural Network": MLPAuth(hidden_layers=(128, 64, 32)),
@@ -63,9 +57,7 @@ def run_keystroke_attacks():
     
     return all_results, orchestrator
 
-
 def run_touch_attacks():
-    """Run adversarial attacks on touch gesture authentication."""
     print("\n" + "=" * 60)
     print("  ADVERSARIAL ATTACKS ON TOUCH AUTHENTICATION")
     print("=" * 60)
@@ -83,7 +75,6 @@ def run_touch_attacks():
     
     orchestrator = AttackOrchestrator()
     
-    # Test on Random Forest (best performing model)
     model = RandomForestAuth(n_estimators=100, max_depth=10)
     model.train(X_train, y_train)
     
@@ -94,9 +85,7 @@ def run_touch_attacks():
     
     return {"touch_rf": {"attacks": attack_res, "defenses": defense_res}}, orchestrator
 
-
 def print_summary(all_results):
-    """Print a summary table of attack effectiveness."""
     print("\n" + "=" * 60)
     print("  ATTACK EFFECTIVENESS SUMMARY")
     print("=" * 60)
@@ -108,25 +97,21 @@ def print_summary(all_results):
     for model_key, data in all_results.items():
         attacks = data.get("attacks", {})
         
-        # Get FGSM ASR at epsilon=0.2
         fgsm_asr = 0
         for r in attacks.get("fgsm", []):
             if abs(r.get("epsilon", 0) - 0.2) < 0.01:
                 fgsm_asr = r.get("attack_success_rate", 0)
         
-        # Get PGD ASR at epsilon=0.2
         pgd_asr = 0
         for r in attacks.get("pgd", []):
             if abs(r.get("epsilon", 0) - 0.2) < 0.01:
                 pgd_asr = r.get("attack_success_rate", 0)
         
-        # Get Mimicry ASR at noise=0.1
         mimicry_asr = 0
         for r in attacks.get("mimicry", []):
             if abs(r.get("noise_level", 0) - 0.1) < 0.01:
                 mimicry_asr = r.get("attack_success_rate", 0)
         
-        # Get Noise ASR at std=0.5
         noise_asr = 0
         for r in attacks.get("noise", []):
             if abs(r.get("noise_std", 0) - 0.5) < 0.01:
@@ -138,7 +123,6 @@ def print_summary(all_results):
               f"{mimicry_asr:>8.3f} "
               f"{noise_asr:>8.3f}")
     
-    # Defense summary
     print(f"\n  {'Defense Summary':^60s}")
     print("  " + "-" * 60)
     
@@ -151,7 +135,6 @@ def print_summary(all_results):
                 name = def_data.get("defense", def_key)
                 print(f"    {name:30s} → {rate:.3f} blocked")
 
-
 def main():
     start = time.time()
     
@@ -161,22 +144,17 @@ def main():
     
     all_results = {}
     
-    # Keystroke attacks
     ks_results, ks_orch = run_keystroke_attacks()
     all_results.update(ks_results)
     
-    # Touch attacks
     tc_results, tc_orch = run_touch_attacks()
     all_results.update(tc_results)
     
-    # Summary
     print_summary(all_results)
     
-    # Save results
     OUTPUT_DIR = os.path.join(BASE_DIR, "../../datasets/attack_results")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    # Clean results for JSON serialization
     def clean_for_json(obj):
         if isinstance(obj, dict):
             return {k: clean_for_json(v) for k, v in obj.items()}
@@ -198,7 +176,6 @@ def main():
     print(f"  ATTACK EVALUATION COMPLETE — {elapsed:.1f} seconds")
     print(f"  Results saved to: {OUTPUT_DIR}")
     print(f"{'='*60}")
-
 
 if __name__ == "__main__":
     main()

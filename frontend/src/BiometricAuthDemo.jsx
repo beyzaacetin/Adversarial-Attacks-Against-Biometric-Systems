@@ -112,7 +112,6 @@ function mimicryAttack(mean, std, noise) {
 }
 
 export default function BiometricAuthDemo() {
-  // --- State ---
   const [phase, setPhase] = useState("enroll"); // enroll | auth | attack
   const [enrollSamples, setEnrollSamples] = useState([]);
   const [userProfile, setUserProfile] = useState(null);
@@ -136,7 +135,6 @@ export default function BiometricAuthDemo() {
   const mouseAreaRef = useRef(null);
   const currentKeys = useRef({});
 
-  // --- Keystroke capture ---
   const handleKeyDown = useCallback((e) => {
     if (!currentKeys.current[e.key]) {
       currentKeys.current[e.key] = { key: e.key, down: performance.now() };
@@ -151,7 +149,6 @@ export default function BiometricAuthDemo() {
     }
   }, []);
 
-  // --- Mouse capture ---
   const handleMouseMove = useCallback((e) => {
     const rect = mouseAreaRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -161,14 +158,12 @@ export default function BiometricAuthDemo() {
     });
   }, []);
 
-  // --- Enroll ---
   const handleEnrollSample = () => {
     const features = extractKeystrokeFeatures(keystrokeEvents);
     if (!features) return;
     const newSamples = [...enrollSamples, features];
     setEnrollSamples(newSamples);
 
-    // Also enroll mouse
     const mf = extractMouseFeatures(mouseTrail);
     if (mf) setMouseEnrollSamples((p) => [...p, mf]);
 
@@ -188,7 +183,6 @@ export default function BiometricAuthDemo() {
       });
       setUserProfile({ mean, std, nSamples: newSamples.length });
 
-      // Mouse profile
       if (mouseEnrollSamples.length >= 3) {
         const mm = mouseEnrollSamples[0].map((_, i) =>
           mouseEnrollSamples.reduce((s, r) => s + r[i], 0) / mouseEnrollSamples.length
@@ -231,7 +225,6 @@ export default function BiometricAuthDemo() {
     }
   };
 
-  // --- Authenticate ---
   const handleAuthenticate = () => {
     let features = extractKeystrokeFeatures(keystrokeEvents);
     if (!features || !userProfile) return;
@@ -241,7 +234,6 @@ export default function BiometricAuthDemo() {
     const threshold = -5.0;
     const isGenuine = score > threshold && cosine > 0.5;
 
-    // Mouse score
     let mScore = null;
     const mf = extractMouseFeatures(mouseTrail);
     if (mf && mouseProfile) {
@@ -264,7 +256,6 @@ export default function BiometricAuthDemo() {
     setMouseTrail([]);
   };
 
-  // --- Defense helpers ---
   const applyDefenses = (features) => {
     let f = [...features];
     if (defenseSmoothing) {
@@ -280,7 +271,6 @@ export default function BiometricAuthDemo() {
     return f;
   };
 
-  // --- Attack ---
   const runAttack = () => {
     if (!userProfile) return;
     const { mean, std } = userProfile;
@@ -370,7 +360,7 @@ export default function BiometricAuthDemo() {
 
   return (
     <div style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif", maxWidth: 720, margin: "0 auto", padding: 16 }}>
-      {/* Header */}
+      {}
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: "var(--color-text-primary, #1a1a1a)" }}>
           Biometric Authentication Demo
@@ -380,7 +370,7 @@ export default function BiometricAuthDemo() {
         </p>
       </div>
 
-      {/* Tabs */}
+      {}
       <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #e0e0e0", marginBottom: 20, alignItems: "center" }}>
         <button style={tabStyle("enroll")} onClick={() => setPhase("enroll")}>1. Enroll</button>
         <button style={tabStyle("auth")} onClick={() => userProfile && setPhase("auth")}>2. Authenticate</button>
@@ -390,7 +380,7 @@ export default function BiometricAuthDemo() {
         </div>
       </div>
 
-      {/* ============ ENROLL ============ */}
+      {}
       {phase === "enroll" && (
         <div>
           <div style={cardStyle}>
@@ -448,7 +438,7 @@ export default function BiometricAuthDemo() {
             </div>
           </div>
 
-          {/* Enrollment progress */}
+          {}
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             {[0, 1, 2, 3, 4].map((i) => (
               <div key={i} style={{
@@ -467,7 +457,7 @@ export default function BiometricAuthDemo() {
         </div>
       )}
 
-      {/* ============ AUTHENTICATE ============ */}
+      {}
       {phase === "auth" && (
         <div>
           <div style={cardStyle}>
@@ -504,7 +494,7 @@ export default function BiometricAuthDemo() {
             </button>
           </div>
 
-          {/* Auth result */}
+          {}
           {authResult && (
             <div style={{
               ...cardStyle,
@@ -533,7 +523,7 @@ export default function BiometricAuthDemo() {
             </div>
           )}
 
-          {/* History */}
+          {}
           {history.length > 0 && (
             <div style={{ ...cardStyle, maxHeight: 200, overflow: "auto" }}>
               <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Authentication history</div>
@@ -548,7 +538,7 @@ export default function BiometricAuthDemo() {
         </div>
       )}
 
-      {/* ============ ATTACK ============ */}
+      {}
       {phase === "attack" && (
         <div>
           <div style={cardStyle}>
@@ -556,7 +546,7 @@ export default function BiometricAuthDemo() {
               Adversarial attack simulation
             </div>
 
-            {/* Attack type selector */}
+            {}
             <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
               {[
                 { key: "fgsm", label: "FGSM", desc: "Single-step gradient" },
@@ -576,7 +566,7 @@ export default function BiometricAuthDemo() {
               ))}
             </div>
 
-            {/* Attack parameters */}
+            {}
             {(attackType === "fgsm" || attackType === "pgd") && (
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 13, color: "#666" }}>
@@ -608,7 +598,7 @@ export default function BiometricAuthDemo() {
               </div>
             )}
 
-            {/* Defense toggles */}
+            {}
             <div style={{ borderTop: "1px solid #e0e0e0", marginTop: 12, paddingTop: 12, marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 500, color: "#444", marginBottom: 8 }}>Active Defenses</div>
               <div style={{ display: "flex", gap: 16 }}>
@@ -637,7 +627,7 @@ export default function BiometricAuthDemo() {
             </button>
           </div>
 
-          {/* Attack results */}
+          {}
           {attackResults.length > 0 && (
             <div style={cardStyle}>
               <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Attack results</div>
@@ -669,7 +659,7 @@ export default function BiometricAuthDemo() {
                       </span>
                     )}
                   </div>
-                  {/* PGD trajectory mini-chart */}
+                  {}
                   {r.trajectory && (
                     <svg viewBox={`0 0 ${r.trajectory.length * 4} 40`} style={{ width: "100%", height: 30, marginTop: 4 }}>
                       <polyline

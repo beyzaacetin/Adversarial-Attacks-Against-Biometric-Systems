@@ -1,6 +1,4 @@
-"""FastAPI backend for biometric authentication demo."""
-
-from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict
@@ -9,7 +7,6 @@ import json
 import os
 import sys
 
-# Add project paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE_DIR, "../models"))
 sys.path.insert(0, os.path.join(BASE_DIR, "../attacks"))
@@ -35,7 +32,6 @@ app.add_middleware(
 )
 
 class AppState:
-    """Holds enrolled users, models, and settings."""
     def __init__(self):
         self.enrolled_users: Dict[str, dict] = {}
         self.models: Dict[str, object] = {}
@@ -72,7 +68,6 @@ class AttackRequest(BaseModel):
     noise_level: Optional[float] = 0.1
 
 def extract_keystroke_features(keystrokes: List[dict]) -> List[float]:
-    """Extract timing features from raw keystroke events."""
     if len(keystrokes) < 2:
         return [0.0] * 20
     
@@ -102,7 +97,6 @@ def extract_keystroke_features(keystrokes: List[dict]) -> List[float]:
         else:
             features.extend(times + [0.0] * (5 - len(times)))
     
-    # Statistical features
     for times in [hold_times, dd_times, ud_times]:
         if times:
             features.append(np.mean(times))
@@ -110,14 +104,12 @@ def extract_keystroke_features(keystrokes: List[dict]) -> List[float]:
         else:
             features.extend([0.0, 0.0])
     
-    # Typing speed (chars per second)
     total_time = sum(dd_times) if dd_times else 1.0
     features.append(len(keystrokes) / total_time)
     
     return features[:20]  # Fixed 20-dim vector
 
 def extract_mouse_features(movements: List[dict]) -> List[float]:
-    """Extract behavioral features from mouse movement data."""
     if len(movements) < 3:
         return [0.0] * 15
     
@@ -127,7 +119,6 @@ def extract_mouse_features(movements: List[dict]) -> List[float]:
     ys = [m["y"] for m in movements]
     ts = [m["timestamp"] for m in movements]
     
-    # Speed features
     speeds = []
     for i in range(1, len(xs)):
         dx = xs[i] - xs[i-1]
@@ -140,7 +131,6 @@ def extract_mouse_features(movements: List[dict]) -> List[float]:
     features.append(np.std(speeds) if len(speeds) > 1 else 0)
     features.append(np.max(speeds) if speeds else 0)
     
-    # Acceleration
     accels = []
     for i in range(1, len(speeds)):
         dt = max((ts[i+1] - ts[i]) / 1000.0, 0.001)
@@ -149,7 +139,6 @@ def extract_mouse_features(movements: List[dict]) -> List[float]:
     features.append(np.mean(np.abs(accels)) if accels else 0)
     features.append(np.std(accels) if len(accels) > 1 else 0)
     
-    # Direction features
     angles = []
     for i in range(1, len(xs)):
         angles.append(np.arctan2(ys[i] - ys[i-1], xs[i] - xs[i-1]))
@@ -157,7 +146,6 @@ def extract_mouse_features(movements: List[dict]) -> List[float]:
     features.append(np.mean(angles) if angles else 0)
     features.append(np.std(angles) if len(angles) > 1 else 0)
     
-    # Path features
     total_dist = sum(np.sqrt((xs[i]-xs[i-1])**2 + (ys[i]-ys[i-1])**2) 
                      for i in range(1, len(xs)))
     displacement = np.sqrt((xs[-1]-xs[0])**2 + (ys[-1]-ys[0])**2)
@@ -167,11 +155,9 @@ def extract_mouse_features(movements: List[dict]) -> List[float]:
     clicks = [m for m in movements if m.get("event_type") == "click"]
     features.append(len(clicks))
     
-    # Duration
     duration = (ts[-1] - ts[0]) / 1000.0 if len(ts) > 1 else 0
     features.append(duration)
     
-    # Curvature
     curvatures = []
     for i in range(1, len(angles)):
         curvatures.append(abs(angles[i] - angles[i-1]))
@@ -186,7 +172,6 @@ def root():
 
 @app.get("/api/users")
 def list_users():
-    """List all enrolled users."""
     users = []
     for uid, data in state.enrolled_users.items():
         users.append({
@@ -199,7 +184,6 @@ def list_users():
 
 @app.post("/api/enroll")
 def enroll_user(req: EnrollRequest):
-    """Enroll a user with baseline behavioral samples."""
     if len(req.keystroke_samples) < 3:
         raise HTTPException(400, "Need at least 3 keystroke samples for enrollment")
     
@@ -239,7 +223,6 @@ def enroll_user(req: EnrollRequest):
 
 @app.post("/api/authenticate")
 def authenticate(req: AuthRequest):
-    """Authenticate a user based on behavioral features."""
     if req.user_id not in state.enrolled_users:
         raise HTTPException(404, f"User {req.user_id} not enrolled")
     
@@ -250,7 +233,6 @@ def authenticate(req: AuthRequest):
     
     results = {}
     
-    # One-Class SVM
     ocsvm_key = f"{req.user_id}_ocsvm"
     if ocsvm_key in state.models:
         ocsvm = state.models[ocsvm_key]
@@ -262,7 +244,6 @@ def authenticate(req: AuthRequest):
             "confidence": min(abs(score) / 2, 1.0),
         }
     
-    # Random Forest
     rf_key = f"{req.user_id}_rf"
     if rf_key in state.models:
         rf = state.models[rf_key]
@@ -293,7 +274,6 @@ def authenticate(req: AuthRequest):
 
 @app.post("/api/attack/simulate")
 def simulate_attack(req: AttackRequest):
-    """Simulate an adversarial attack against the authentication system."""
     if req.user_id not in state.enrolled_users:
         raise HTTPException(404, f"User {req.user_id} not enrolled")
     
@@ -302,13 +282,10 @@ def simulate_attack(req: AttackRequest):
     std = np.array(user_data["std_features"])
     scaler = state.scalers[req.user_id]
     
-    # Generate impostor sample
     impostor = mean + np.random.normal(0, std * 3, mean.shape)
     
     if req.attack_type == "fgsm":
-        # FGSM: add perturbation in gradient direction
         epsilon = req.epsilon or 0.2
-        # Estimate gradient via finite differences
         ocsvm_key = f"{req.user_id}_ocsvm"
         if ocsvm_key in state.models:
             model = state.models[ocsvm_key]
@@ -391,7 +368,6 @@ def simulate_attack(req: AttackRequest):
     
     elif req.attack_type == "mimicry":
         noise = req.noise_level or 0.1
-        # Generate sample from target's distribution
         mimicry_sample = np.random.normal(mean, std * (1 + noise))
         X_mimicry = scaler.transform(mimicry_sample.reshape(1, -1))
         
@@ -429,7 +405,6 @@ def simulate_attack(req: AttackRequest):
 
 @app.get("/api/stats")
 def get_stats():
-    """Get authentication and attack statistics."""
     n_auth = len(state.auth_history)
     n_attacks = len(state.attack_history)
     
@@ -446,7 +421,6 @@ def get_stats():
 
 @app.post("/api/keystroke/extract")
 def extract_keystroke(data: KeystrokeData):
-    """Extract features from raw keystroke events (browser → features)."""
     features = extract_keystroke_features(data.keystrokes)
     return {
         "user_id": data.user_id,
@@ -457,7 +431,6 @@ def extract_keystroke(data: KeystrokeData):
 
 @app.post("/api/mouse/extract")
 def extract_mouse(data: MouseData):
-    """Extract features from raw mouse movement events."""
     features = extract_mouse_features(data.movements)
     return {
         "user_id": data.user_id,
@@ -465,21 +438,17 @@ def extract_mouse(data: MouseData):
         "n_events": len(data.movements),
     }
 
-
 @app.on_event("startup")
 def seed_demo_data():
-    """Create a demo user with pre-generated enrollment data."""
     np.random.seed(42)
     n_features = 20
     
-    # Generate realistic enrollment data for demo_user
     base_profile = np.random.uniform(0.05, 0.3, n_features)
     samples = []
     for _ in range(20):
         sample = base_profile + np.random.normal(0, base_profile * 0.1)
         samples.append(sample.tolist())
     
-    # Enroll via the API logic
     req = EnrollRequest(user_id="demo_user", keystroke_samples=samples)
     enroll_user(req)
     print("[OK] Demo user 'demo_user' pre-enrolled with 20 keystroke samples")

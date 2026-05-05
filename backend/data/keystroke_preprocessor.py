@@ -1,6 +1,4 @@
-"""Keystroke dynamics preprocessor for CMU-format data."""
-
-import numpy as np
+﻿import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
@@ -8,7 +6,6 @@ import os
 import json
 
 class KeystrokePreprocessor:
-    """Preprocessor for CMU Keystroke Dynamics data."""
     
     def __init__(self, data_path=None):
         self.data_path = data_path
@@ -18,7 +15,6 @@ class KeystrokePreprocessor:
         self.user_stats = {}
         
     def load_data(self, path=None):
-        """Load keystroke dataset from CSV."""
         path = path or self.data_path
         if path is None:
             raise ValueError("Data path not specified")
@@ -32,7 +28,6 @@ class KeystrokePreprocessor:
         return self.df
     
     def extract_derived_features(self):
-        """Add derived features beyond raw timing data."""
         df = self.df.copy()
         
         hold_cols = [c for c in self.feature_cols if c.startswith("H.")]
@@ -49,7 +44,6 @@ class KeystrokePreprocessor:
         df["rhythm_cv"] = df["std_dd_time"] / (df["avg_dd_time"] + 1e-8)
         df["overlap_ratio"] = (df[ud_cols] < 0).sum(axis=1) / len(ud_cols)
         
-        # Update feature columns
         derived = ["avg_hold_time", "std_hold_time", "avg_dd_time", "std_dd_time",
                    "avg_ud_time", "std_ud_time", "typing_speed", "rhythm_cv", "overlap_ratio"]
         self.feature_cols = self.feature_cols + derived
@@ -59,7 +53,6 @@ class KeystrokePreprocessor:
         return df
     
     def compute_user_statistics(self):
-        """Compute per-user statistics for anomaly-based authentication."""
         for subject in self.df["subject"].unique():
             user_data = self.df[self.df["subject"] == subject]
             enrollment = user_data[user_data["sessionIndex"] <= 4]
@@ -75,7 +68,6 @@ class KeystrokePreprocessor:
         return self.user_stats
     
     def create_authentication_dataset(self, target_subject, n_impostors=5):
-        """Create binary classification dataset for a target user."""
         genuine = self.df[self.df["subject"] == target_subject].copy()
         genuine["label"] = 1
         genuine_train = genuine[genuine["sessionIndex"] <= 4]
@@ -105,7 +97,6 @@ class KeystrokePreprocessor:
         X_test = test_df[self.feature_cols].values
         y_test = test_df["label"].values
         
-        # Normalize
         self.scaler.fit(X_train)
         X_train = self.scaler.transform(X_train)
         X_test = self.scaler.transform(X_test)
@@ -117,7 +108,6 @@ class KeystrokePreprocessor:
         return X_train, X_test, y_train, y_test
     
     def create_anomaly_detection_dataset(self, target_subject):
-        """Create one-class dataset with genuine-only training samples."""
         genuine = self.df[self.df["subject"] == target_subject]
         train_data = genuine[genuine["sessionIndex"] <= 4]
         X_train = train_data[self.feature_cols].values
@@ -129,7 +119,6 @@ class KeystrokePreprocessor:
         ).reset_index(drop=True)
         X_test_impostor = impostor_samples[self.feature_cols].values
         
-        # Normalize
         self.scaler.fit(X_train)
         X_train = self.scaler.transform(X_train)
         X_test_genuine = self.scaler.transform(X_test_genuine)
@@ -143,7 +132,6 @@ class KeystrokePreprocessor:
         return X_train, X_test_genuine, X_test_impostor
     
     def create_sequence_dataset(self, target_subject, seq_length=10):
-        """Create sequential dataset for LSTM-based models."""
         X_train, X_test, y_train, y_test = self.create_authentication_dataset(
             target_subject, n_impostors=5
         )
@@ -153,7 +141,6 @@ class KeystrokePreprocessor:
             labels = []
             for i in range(len(X) - seq_len + 1):
                 sequences.append(X[i:i+seq_len])
-                # Majority vote for sequence label
                 labels.append(1 if sum(y[i:i+seq_len]) > seq_len // 2 else 0)
             return np.array(sequences), np.array(labels)
         
@@ -167,7 +154,6 @@ class KeystrokePreprocessor:
         return X_train_seq, X_test_seq, y_train_seq, y_test_seq
     
     def get_feature_importance_data(self):
-        """Get data formatted for feature importance analysis."""
         return {
             "feature_names": self.feature_cols,
             "n_hold_features": len([c for c in self.feature_cols if c.startswith("H.")]),
@@ -177,50 +163,40 @@ class KeystrokePreprocessor:
         }
     
     def save_processed_data(self, output_dir):
-        """Save all processed data for later use."""
         os.makedirs(output_dir, exist_ok=True)
         
-        # Save processed DataFrame
         self.df.to_csv(os.path.join(output_dir, "keystroke_processed.csv"), index=False)
         
-        # Save feature columns list
         with open(os.path.join(output_dir, "feature_cols.json"), "w") as f:
             json.dump(self.feature_cols, f)
         
-        # Save scaler parameters
         if hasattr(self.scaler, "mean_"):
             np.save(os.path.join(output_dir, "scaler_mean.npy"), self.scaler.mean_)
             np.save(os.path.join(output_dir, "scaler_scale.npy"), self.scaler.scale_)
         
         print(f"Processed data saved to {output_dir}")
 
-
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     DATA_DIR = os.path.join(BASE_DIR, "../../datasets/keystroke")
     PROCESSED_DIR = os.path.join(BASE_DIR, "../../datasets/keystroke/processed")
     
-    # Step 0: Generate synthetic data if not exists
     csv_path = os.path.join(DATA_DIR, "DSL-StrongPasswordData.csv")
     if not os.path.exists(csv_path):
         print("=== Generating synthetic CMU-format data ===")
         from generate_keystroke_data import generate_dataset
         generate_dataset(output_dir=DATA_DIR)
     
-    # Step 1: Load
     print("\n=== Loading Data ===")
     preprocessor = KeystrokePreprocessor(csv_path)
     preprocessor.load_data()
     
-    # Step 2: Extract derived features
     print("\n=== Extracting Derived Features ===")
     preprocessor.extract_derived_features()
     
-    # Step 3: Compute user statistics
     print("\n=== Computing User Profiles ===")
     preprocessor.compute_user_statistics()
     
-    # Step 4: Create datasets for subject s001
     print("\n=== Creating Binary Classification Dataset (s001) ===")
     X_train, X_test, y_train, y_test = preprocessor.create_authentication_dataset("s001")
     
@@ -230,7 +206,6 @@ if __name__ == "__main__":
     print("\n=== Creating Sequence Dataset (s001) ===")
     X_train_seq, X_test_seq, y_train_seq, y_test_seq = preprocessor.create_sequence_dataset("s001")
     
-    # Step 5: Feature info
     print("\n=== Feature Summary ===")
     feat_info = preprocessor.get_feature_importance_data()
     print(f"  Hold features:    {feat_info['n_hold_features']}")
@@ -239,7 +214,6 @@ if __name__ == "__main__":
     print(f"  Derived features: {feat_info['n_derived_features']}")
     print(f"  Total features:   {len(feat_info['feature_names'])}")
     
-    # Step 6: Save
     print("\n=== Saving Processed Data ===")
     preprocessor.save_processed_data(PROCESSED_DIR)
     

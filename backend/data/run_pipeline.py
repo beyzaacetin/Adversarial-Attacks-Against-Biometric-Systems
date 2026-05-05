@@ -1,10 +1,7 @@
-"""Master data pipeline runner for all biometric preprocessing steps."""
-
-import os
+﻿import os
 import sys
 import time
 
-# Add project root to path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
@@ -34,7 +31,6 @@ def run_pipeline():
     ks_proc.extract_derived_features()
     ks_proc.compute_user_statistics()
     
-    # Create datasets for first 3 users as examples
     for subj in ["s001", "s002", "s003"]:
         ks_proc.create_authentication_dataset(subj, n_impostors=5)
     
@@ -76,26 +72,8 @@ def run_pipeline():
     print("\n" + "=" * 60)
     print("  PIPELINE SUMMARY")
     print("=" * 60)
-    print(f"""
-    Keystroke Dynamics:
-      - Dataset: CMU-format, 51 subjects × 400 reps
-      - Features: 31 raw + 9 derived = 40 total
-      - Split: Sessions 1-4 (train) / 5-8 (test)
-      
-    Mouse Dynamics:
-      - Dataset: Balabit-format, 10 users × 12 sessions
-      - Features: 35 behavioral features extracted
-      - Split: Training (genuine) / Test (genuine + impostor)
-      
-    Touch Gestures:
-      - Dataset: Synthetic, 15 users × 200 gestures
-      - Features: 16 gesture features
-      - 9 gesture types simulated
-      
-    Total time: {elapsed:.1f} seconds
-    """)
+    print(f)
     
-    # Print directory structure
     print("  Dataset directory structure:")
     for root, dirs, files in os.walk(os.path.join(BASE_DIR, "../../datasets")):
         level = root.replace(os.path.join(BASE_DIR, "../../datasets"), "").count(os.sep)
@@ -107,7 +85,6 @@ def run_pipeline():
     
     print("\n✓ All data pipelines complete!")
     return True
-
 
 if __name__ == "__main__":
     success = run_pipeline()

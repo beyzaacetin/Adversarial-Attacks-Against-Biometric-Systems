@@ -1,6 +1,4 @@
-"""Adversarial attack and defense implementations for biometric models."""
-
-import numpy as np
+﻿import numpy as np
 import json
 import os
 from sklearn.neural_network import MLPClassifier, MLPRegressor
@@ -8,13 +6,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score, confusion_matrix
 from copy import deepcopy
 
-
 class GradientEstimator:
-    """Estimate gradients for sklearn models using finite differences."""
     
     @staticmethod
     def numerical_gradient(model_fn, X, epsilon=1e-4):
-        """Compute numerical gradient using central finite differences."""
         n_samples, n_features = X.shape
         gradients = np.zeros_like(X)
         
@@ -33,7 +28,6 @@ class GradientEstimator:
     
     @staticmethod
     def zoo_gradient(model_fn, X, epsilon=1e-3, n_queries=None):
-        """Zeroth-Order Optimization gradient estimation via random direction sampling."""
         n_samples, n_features = X.shape
         if n_queries is None:
             n_queries = min(n_features, 20)
@@ -41,23 +35,19 @@ class GradientEstimator:
         gradients = np.zeros_like(X)
         
         for _ in range(n_queries):
-            # Random direction
             direction = np.random.randn(n_samples, n_features)
             direction = direction / (np.linalg.norm(direction, axis=1, keepdims=True) + 1e-8)
             
             score_plus = model_fn(X + epsilon * direction)
             score_minus = model_fn(X - epsilon * direction)
             
-            # Project gradient onto random direction
             grad_estimate = ((score_plus - score_minus) / (2 * epsilon))[:, np.newaxis]
             gradients += grad_estimate * direction
         
         gradients /= n_queries
         return gradients
 
-
 class FGSMAttack:
-    """Fast Gradient Sign Method (FGSM) adversarial attack."""
     
     def __init__(self, epsilon=0.1, targeted=True):
         self.epsilon = epsilon
@@ -65,8 +55,6 @@ class FGSMAttack:
         self.name = "FGSM"
     
     def attack(self, model_score_fn, X_impostor, gradient_method='numerical'):
-        """Generate adversarial examples from impostor samples."""
-        # Estimate gradient
         if gradient_method == 'zoo':
             gradients = GradientEstimator.zoo_gradient(model_score_fn, X_impostor)
         else:
@@ -82,7 +70,6 @@ class FGSMAttack:
         return X_adversarial, perturbation
     
     def evaluate_attack(self, model_predict_fn, model_score_fn, X_impostor, X_adversarial):
-        """Evaluate attack effectiveness."""
         orig_pred = model_predict_fn(X_impostor)
         orig_scores = model_score_fn(X_impostor)
         adv_pred = model_predict_fn(X_adversarial)
@@ -93,7 +80,6 @@ class FGSMAttack:
         
         asr = n_now_accepted / max(n_originally_rejected, 1)
         
-        # Average score increase
         score_increase = np.mean(adv_scores - orig_scores)
         
         return {
@@ -112,9 +98,7 @@ class FGSMAttack:
                 X_adversarial - X_impostor))),
         }
 
-
 class PGDAttack:
-    """Projected Gradient Descent (PGD) iterative adversarial attack."""
     
     def __init__(self, epsilon=0.1, alpha=0.01, n_iterations=40, random_start=True):
         self.epsilon = epsilon
@@ -125,7 +109,6 @@ class PGDAttack:
         self.attack_history = []
     
     def attack(self, model_score_fn, X_impostor, gradient_method='numerical'):
-        """Generate adversarial examples using iterative PGD."""
         X_orig = X_impostor.copy()
         
         if self.random_start:
@@ -141,7 +124,6 @@ class PGDAttack:
         self.attack_history = []
         
         for step in range(self.n_iterations):
-            # Estimate gradient
             if gradient_method == 'zoo':
                 gradients = GradientEstimator.zoo_gradient(model_score_fn, X_adv)
             else:
@@ -155,7 +137,6 @@ class PGDAttack:
             best_X_adv[improved] = X_adv[improved]
             best_scores = np.maximum(best_scores, current_scores)
             
-            # Log progress
             self.attack_history.append({
                 "step": step,
                 "avg_score": float(np.mean(current_scores)),
@@ -167,7 +148,6 @@ class PGDAttack:
         return best_X_adv, total_perturbation
     
     def evaluate_attack(self, model_predict_fn, model_score_fn, X_impostor, X_adversarial):
-        """Evaluate attack using same interface as FGSM."""
         fgsm_eval = FGSMAttack(self.epsilon)
         result = fgsm_eval.evaluate_attack(
             model_predict_fn, model_score_fn, X_impostor, X_adversarial
@@ -178,20 +158,16 @@ class PGDAttack:
         result["attack_trajectory"] = self.attack_history
         return result
 
-
 class StatisticalMimicryAttack:
-    """Statistical mimicry attack that generates samples matching the target user's profile."""
     
     def __init__(self, noise_level=0.1):
         self.noise_level = noise_level
         self.name = f"Mimicry-{noise_level}"
     
     def attack(self, X_genuine_reference, n_samples=50):
-        """Generate synthetic samples mimicking the target user's statistical profile."""
         mean = np.mean(X_genuine_reference, axis=0)
         std = np.std(X_genuine_reference, axis=0)
         
-        # Generate from fitted distribution with noise
         X_mimicry = np.random.normal(
             loc=mean,
             scale=std * (1 + self.noise_level),
@@ -201,7 +177,6 @@ class StatisticalMimicryAttack:
         return X_mimicry
     
     def evaluate_attack(self, model_predict_fn, model_score_fn, X_mimicry):
-        """Evaluate how many mimicry samples are accepted."""
         predictions = model_predict_fn(X_mimicry)
         scores = model_score_fn(X_mimicry)
         
@@ -217,12 +192,7 @@ class StatisticalMimicryAttack:
             "noise_level": self.noise_level,
         }
 
-
 class NoiseInjectionAttack:
-    """
-    Simple noise injection to test model robustness.
-    Tests if random perturbation can flip decisions.
-    """
     
     def __init__(self, noise_std=0.5):
         self.noise_std = noise_std
@@ -248,14 +218,11 @@ class NoiseInjectionAttack:
             "attack_success_rate": float(n_now_accepted / max(np.sum(orig_pred == 0), 1)),
         }
 
-
 class AdversarialDefense:
-    """Collection of defense mechanisms against adversarial attacks."""
     
     @staticmethod
     def adversarial_training(model_class, model_params, X_train, y_train,
                              attack_fn, n_augment_ratio=0.3):
-        """Augment training data with adversarial examples and retrain the model."""
         genuine_mask = y_train == 1
         X_genuine = X_train[genuine_mask]
         n_adv = int(len(X_genuine) * n_augment_ratio)
@@ -274,7 +241,6 @@ class AdversarialDefense:
     
     @staticmethod
     def input_smoothing(X, sigma=0.5):
-        """Apply input smoothing to reduce adversarial perturbations."""
         noise = np.random.normal(0, sigma, X.shape)
         X_smoothed = X + noise
         X_smoothed = (X + X_smoothed) / 2
@@ -282,7 +248,6 @@ class AdversarialDefense:
     
     @staticmethod
     def feature_squeezing(X, n_bits=4):
-        """Reduce feature precision to eliminate small adversarial perturbations."""
         X_min = X.min(axis=0)
         X_max = X.max(axis=0)
         X_range = X_max - X_min + 1e-8
@@ -296,7 +261,6 @@ class AdversarialDefense:
     @staticmethod
     def anomaly_threshold_adjustment(base_scores, genuine_scores,
                                       confidence=0.99):
-        """Compute an adaptive threshold from the genuine score distribution."""
         mean_score = np.mean(genuine_scores)
         std_score = np.std(genuine_scores)
         from scipy.stats import norm
@@ -308,7 +272,6 @@ class AdversarialDefense:
     
     @staticmethod
     def ensemble_defense(models, X, strategy='unanimous'):
-        """Combine predictions from multiple models using the given strategy."""
         predictions = []
         for model in models:
             pred = model.predict(X)
@@ -325,9 +288,7 @@ class AdversarialDefense:
         else:
             return (preds.mean(axis=1) >= 0.5).astype(int)
 
-
 class AttackOrchestrator:
-    """Orchestrates attacks and defenses across models."""
     
     def __init__(self):
         self.attack_results = []
@@ -335,22 +296,16 @@ class AttackOrchestrator:
     
     def run_full_evaluation(self, model, X_train, X_test, y_train, y_test, 
                             model_name="model"):
-        """
-        Run all attacks at various epsilon levels against a model,
-        then test all defenses.
-        """
         print(f"\n{'='*55}")
         print(f"  ADVERSARIAL EVALUATION: {model_name}")
         print(f"{'='*55}")
         
-        # Define model interface functions
         def predict_fn(X):
             return model.predict(X)
         
         def score_fn(X):
             return model.predict_score(X)
         
-        # Separate genuine and impostor test data
         genuine_mask = y_test == 1
         impostor_mask = y_test == 0
         X_genuine = X_test[genuine_mask]
@@ -419,16 +374,13 @@ class AttackOrchestrator:
         
         all_attack_results["noise"] = noise_results
         
-        # ==== DEFENSES ====
         print(f"\n  === DEFENSE EVALUATION ===")
         all_defense_results = {}
         
-        # Find the strongest FGSM attack for defense testing
         best_fgsm_eps = max(fgsm_results, key=lambda x: x["attack_success_rate"])["epsilon"]
         fgsm_attack = FGSMAttack(epsilon=best_fgsm_eps)
         X_adv_strong, _ = fgsm_attack.attack(score_fn, X_impostor)
         
-        # Defense 1: Input Smoothing
         print(f"\n  Defense: Input Smoothing")
         for sigma in [0.1, 0.3, 0.5]:
             X_adv_smoothed = AdversarialDefense.input_smoothing(X_adv_strong, sigma=sigma)
@@ -444,7 +396,6 @@ class AttackOrchestrator:
                 "defense_rate": float(defense_rate),
             }
         
-        # Defense 2: Feature Squeezing
         print(f"\n  Defense: Feature Squeezing")
         for n_bits in [2, 4, 6]:
             X_adv_squeezed = AdversarialDefense.feature_squeezing(X_adv_strong, n_bits=n_bits)
@@ -458,7 +409,6 @@ class AttackOrchestrator:
                 "defense_rate": float(defense_rate),
             }
         
-        # Defense 3: Adversarial Training
         print(f"\n  Defense: Adversarial Training")
         if hasattr(model, 'model') and hasattr(model.model, 'fit'):
             try:
@@ -466,16 +416,13 @@ class AttackOrchestrator:
                     fgsm = FGSMAttack(epsilon=best_fgsm_eps)
                     return fgsm.attack(score_fn, X)
                 
-                # Retrain with adversarial examples
                 retrained_model = deepcopy(model)
                 
-                # For binary classifiers
                 if model.model_type == 'binary':
                     X_aug = np.vstack([X_train, X_adv_strong])
                     y_aug = np.concatenate([y_train, np.zeros(len(X_adv_strong))])
                     retrained_model.model.fit(X_aug, y_aug)
                     
-                    # Test retrained model against same attack
                     X_adv_retest, _ = fgsm_attack.attack(
                         lambda X: retrained_model.predict_score(X), X_impostor
                     )
@@ -484,7 +431,6 @@ class AttackOrchestrator:
                     defense_rate = n_blocked / len(X_adv_retest)
                     print(f"    After retraining → Blocked {n_blocked}/{len(X_adv_retest)} = {defense_rate:.3f}")
                     
-                    # Also check clean accuracy didn't degrade too much
                     clean_pred = retrained_model.predict(X_test)
                     clean_acc = accuracy_score(y_test, clean_pred)
                     print(f"    Clean accuracy: {baseline_acc:.4f} → {clean_acc:.4f}")
@@ -504,7 +450,6 @@ class AttackOrchestrator:
         return all_attack_results, all_defense_results
     
     def generate_report(self):
-        """Generate summary report of all attacks and defenses."""
         report = {
             "attacks": self.attack_results,
             "defenses": self.defense_results,

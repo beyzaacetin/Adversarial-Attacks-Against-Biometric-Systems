@@ -1,6 +1,4 @@
-"""ML authentication models for behavioral biometric data."""
-
-import numpy as np
+﻿import numpy as np
 import json
 import os
 import pickle
@@ -12,9 +10,7 @@ from sklearn.metrics import (
     roc_auc_score, roc_curve, confusion_matrix
 )
 
-
 class BaseAuthModel:
-    """Base class for all authentication models."""
     
     def __init__(self, name, model_type):
         self.name = name
@@ -30,11 +26,9 @@ class BaseAuthModel:
         raise NotImplementedError
     
     def predict_score(self, X_test):
-        """Return continuous authentication score (higher = more likely genuine)."""
         raise NotImplementedError
     
     def evaluate(self, X_test, y_test):
-        """Compute comprehensive security metrics."""
         y_pred = self.predict(X_test)
         scores = self.predict_score(X_test)
         
@@ -46,13 +40,11 @@ class BaseAuthModel:
             "f1": float(f1_score(y_test, y_pred, zero_division=0)),
         }
         
-        # ROC AUC (needs continuous scores)
         try:
             metrics["auc_roc"] = float(roc_auc_score(y_test, scores))
         except ValueError:
             metrics["auc_roc"] = 0.0
         
-        # Confusion matrix
         cm = confusion_matrix(y_test, y_pred)
         if cm.shape == (2, 2):
             tn, fp, fn, tp = cm.ravel()
@@ -63,7 +55,6 @@ class BaseAuthModel:
             metrics["false_positive"] = int(fp)
             metrics["false_negative"] = int(fn)
         
-        # EER (Equal Error Rate) computation
         try:
             fpr, tpr, thresholds = roc_curve(y_test, scores)
             fnr = 1 - tpr
@@ -77,7 +68,6 @@ class BaseAuthModel:
         return metrics
     
     def get_roc_data(self, X_test, y_test):
-        """Get ROC curve data points for visualization."""
         scores = self.predict_score(X_test)
         try:
             fpr, tpr, thresholds = roc_curve(y_test, scores)
@@ -91,20 +81,16 @@ class BaseAuthModel:
             return {"fpr": [0, 1], "tpr": [0, 1], "thresholds": [1, 0], "auc": 0.5}
     
     def save(self, path):
-        """Save trained model."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'wb') as f:
             pickle.dump(self, f)
     
     @staticmethod
     def load(path):
-        """Load trained model."""
         with open(path, 'rb') as f:
             return pickle.load(f)
 
-
 class OneClassSVMAuth(BaseAuthModel):
-    """One-Class SVM for anomaly-based authentication."""
     
     def __init__(self, kernel='rbf', nu=0.1, gamma='scale'):
         super().__init__("One-Class SVM", "anomaly")
@@ -112,7 +98,6 @@ class OneClassSVMAuth(BaseAuthModel):
         self.nu = nu
     
     def train(self, X_train, y_train=None):
-        """Train on genuine samples only."""
         if y_train is not None:
             X_genuine = X_train[y_train == 1]
         else:
@@ -129,17 +114,13 @@ class OneClassSVMAuth(BaseAuthModel):
         return self.training_metrics
     
     def predict(self, X_test):
-        """Returns 1 (genuine) or 0 (impostor)."""
         raw = self.model.predict(X_test)
         return (raw == 1).astype(int)
     
     def predict_score(self, X_test):
-        """Decision function score (higher = more likely genuine)."""
         return self.model.decision_function(X_test)
 
-
 class RandomForestAuth(BaseAuthModel):
-    """Random Forest binary classifier for authentication."""
     
     def __init__(self, n_estimators=100, max_depth=10, random_state=42):
         super().__init__("Random Forest", "binary")
@@ -151,7 +132,6 @@ class RandomForestAuth(BaseAuthModel):
         )
     
     def train(self, X_train, y_train):
-        """Train on labeled genuine + impostor data."""
         self.model.fit(X_train, y_train)
         self.is_trained = True
         
@@ -169,15 +149,12 @@ class RandomForestAuth(BaseAuthModel):
         return self.model.predict(X_test)
     
     def predict_score(self, X_test):
-        """Probability of being genuine."""
         proba = self.model.predict_proba(X_test)
         if proba.shape[1] == 1:
-            # Only one class seen during training
             return proba[:, 0] if self.model.classes_[0] == 1 else 1 - proba[:, 0]
         return proba[:, 1]
     
     def get_feature_importance(self, feature_names=None):
-        """Get feature importance ranking."""
         importances = self.model.feature_importances_
         indices = np.argsort(importances)[::-1]
         
@@ -190,9 +167,7 @@ class RandomForestAuth(BaseAuthModel):
             })
         return result
 
-
 class MLPAuth(BaseAuthModel):
-    """MLP neural network classifier for authentication."""
     
     def __init__(self, hidden_layers=(128, 64, 32), max_iter=500, random_state=42):
         super().__init__("MLP Neural Network", "binary")
@@ -233,14 +208,11 @@ class MLPAuth(BaseAuthModel):
         return self.model.predict_proba(X_test)[:, 1]
     
     def get_loss_curve(self):
-        """Get training loss curve for visualization."""
         if hasattr(self.model, 'loss_curve_'):
             return self.model.loss_curve_
         return []
 
-
 class AutoencoderAuth(BaseAuthModel):
-    """Autoencoder for reconstruction-based anomaly detection."""
     
     def __init__(self, encoding_dim=8, threshold_percentile=95, random_state=42):
         super().__init__("Autoencoder", "anomaly")
@@ -251,7 +223,6 @@ class AutoencoderAuth(BaseAuthModel):
         self.model = None
     
     def _build_model(self, input_dim):
-        """Build autoencoder architecture."""
         
         hidden_sizes = (64, 32, self.encoding_dim, 32, 64)
         
@@ -272,13 +243,11 @@ class AutoencoderAuth(BaseAuthModel):
         )
     
     def _reconstruction_error(self, X):
-        """Compute per-sample reconstruction error (MSE)."""
         X_reconstructed = self.model.predict(X)
         errors = np.mean((X - X_reconstructed) ** 2, axis=1)
         return errors
     
     def train(self, X_train, y_train=None):
-        """Train autoencoder on genuine samples."""
         if y_train is not None:
             X_genuine = X_train[y_train == 1]
         else:
@@ -304,17 +273,14 @@ class AutoencoderAuth(BaseAuthModel):
         return self.training_metrics
     
     def predict(self, X_test):
-        """Classify as genuine (1) or impostor (0) based on reconstruction error."""
         errors = self._reconstruction_error(X_test)
         return (errors <= self.threshold).astype(int)
     
     def predict_score(self, X_test):
-        """Return negative reconstruction error (higher = more genuine)."""
         errors = self._reconstruction_error(X_test)
         return -errors
     
     def get_error_distribution(self, X_genuine, X_impostor):
-        """Get error distributions for visualization."""
         genuine_errors = self._reconstruction_error(X_genuine)
         impostor_errors = self._reconstruction_error(X_impostor)
         return {
@@ -325,9 +291,7 @@ class AutoencoderAuth(BaseAuthModel):
             "impostor_mean": float(np.mean(impostor_errors)),
         }
 
-
 class MultimodalFusion:
-    """Combines scores from multiple biometric modalities."""
     
     def __init__(self, strategy='weighted_average'):
         self.strategy = strategy
@@ -335,12 +299,10 @@ class MultimodalFusion:
         self.meta_model = None
     
     def set_weights(self, weights):
-        """Set manual weights for weighted average fusion."""
         self.weights = np.array(weights)
         self.weights = self.weights / self.weights.sum()
     
     def fuse_scores(self, score_list):
-        """Fuse scores from multiple models/modalities."""
         scores = np.column_stack(score_list)
         
         if self.strategy == 'average':
@@ -361,34 +323,28 @@ class MultimodalFusion:
             return np.mean(scores, axis=1)
     
     def fuse_decisions(self, prediction_list):
-        """Majority vote fusion of binary predictions."""
         preds = np.column_stack(prediction_list)
         return (np.mean(preds, axis=1) >= 0.5).astype(int)
     
     def train_meta_classifier(self, score_list, y_true):
-        """Train a learned fusion model (stacking)."""
         scores = np.column_stack(score_list)
         self.meta_model = RandomForestClassifier(n_estimators=50, random_state=42)
         self.meta_model.fit(scores, y_true)
         self.strategy = 'learned'
     
     def predict_learned(self, score_list):
-        """Predict using the learned meta-classifier."""
         if self.meta_model is None:
             raise ValueError("Meta-classifier not trained")
         scores = np.column_stack(score_list)
         return self.meta_model.predict(scores)
 
-
 class ModelTrainer:
-    """Orchestrates training and evaluation of all models across all biometric modalities."""
     
     def __init__(self):
         self.models = {}
         self.results = {}
     
     def train_all_models(self, X_train, X_test, y_train, y_test, modality_name="keystroke"):
-        """Train all 4 model types on a single modality."""
         
         print(f"\n{'='*50}")
         print(f"  Training models for: {modality_name}")
@@ -408,11 +364,9 @@ class ModelTrainer:
             print(f"\n--- {model.name} ---")
             
             try:
-                # Train
                 train_info = model.train(X_train, y_train)
                 print(f"  Training: {train_info}")
                 
-                # Evaluate
                 metrics = model.evaluate(X_test, y_test)
                 results[model_key] = metrics
                 
@@ -433,7 +387,6 @@ class ModelTrainer:
         return models, results
     
     def compare_models(self):
-        """Generate comparison table of all trained models."""
         comparison = []
         for key, metrics in self.results.items():
             if "error" not in metrics:
@@ -450,7 +403,6 @@ class ModelTrainer:
         return sorted(comparison, key=lambda x: x["auc_roc"], reverse=True)
     
     def save_all(self, output_dir):
-        """Save all models and results."""
         os.makedirs(output_dir, exist_ok=True)
         
         for key, model in self.models.items():

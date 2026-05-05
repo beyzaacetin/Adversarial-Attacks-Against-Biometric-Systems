@@ -1,14 +1,10 @@
-"""Touchscreen gesture dataset generator and preprocessor."""
-
-import numpy as np
+﻿import numpy as np
 import pandas as pd
 import os
 
 np.random.seed(42)
 
-
 class TouchDataGenerator:
-    """Generate synthetic touchscreen gesture data."""
     
     GESTURE_TYPES = ["swipe_up", "swipe_down", "swipe_left", "swipe_right",
                      "tap", "double_tap", "long_press", "pinch_in", "pinch_out"]
@@ -18,7 +14,6 @@ class TouchDataGenerator:
         self.gestures_per_user = gestures_per_user
     
     def _create_user_profile(self, user_id):
-        """Each user has unique touch characteristics."""
         return {
             "swipe_speed": np.random.uniform(400, 1200),      # px/sec
             "swipe_speed_std": np.random.uniform(50, 150),
@@ -35,19 +30,16 @@ class TouchDataGenerator:
         }
     
     def _generate_swipe(self, profile, direction):
-        """Generate a single swipe gesture."""
         speed = max(100, np.random.normal(profile["swipe_speed"], profile["swipe_speed_std"]))
         pressure = np.clip(np.random.normal(profile["swipe_pressure"], profile["pressure_std"]), 0.1, 1.0)
         area = max(10, np.random.normal(profile["touch_area"], profile["area_std"]))
         
-        # Start position based on hand preference
         if profile["preferred_hand"] == "right":
             start_x = np.random.uniform(150, 350)
         else:
             start_x = np.random.uniform(30, 200)
         start_y = np.random.uniform(200, 600)
         
-        # Direction vectors
         directions = {
             "swipe_up": (0, -1), "swipe_down": (0, 1),
             "swipe_left": (-1, 0), "swipe_right": (1, 0)
@@ -58,7 +50,6 @@ class TouchDataGenerator:
         duration = length / speed
         n_points = max(5, int(duration * 60))  # 60Hz
         
-        # Generate path with curvature
         t_vals = np.linspace(0, duration, n_points)
         curvature = profile["swipe_curvature"] * np.sin(np.linspace(0, np.pi, n_points))
         
@@ -74,7 +65,6 @@ class TouchDataGenerator:
         return pd.DataFrame(points, columns=["time", "x", "y", "pressure", "area"]), duration
     
     def _generate_tap(self, profile, is_double=False):
-        """Generate tap or double tap."""
         if profile["preferred_hand"] == "right":
             x = np.random.uniform(150, 350)
         else:
@@ -104,7 +94,6 @@ class TouchDataGenerator:
         return pd.DataFrame(points, columns=["time", "x", "y", "pressure", "area"]), duration
     
     def _generate_long_press(self, profile):
-        """Generate long press gesture."""
         if profile["preferred_hand"] == "right":
             x = np.random.uniform(150, 350)
         else:
@@ -119,7 +108,6 @@ class TouchDataGenerator:
         points = []
         for i in range(n_points):
             t = duration * i / (n_points - 1)
-            # Slight drift
             cx = x + np.random.normal(0, 1.5)
             cy = y + np.random.normal(0, 1.5)
             p = pressure * (0.9 + 0.1 * np.sin(t * 2))
@@ -128,7 +116,6 @@ class TouchDataGenerator:
         return pd.DataFrame(points, columns=["time", "x", "y", "pressure", "area"]), duration
     
     def generate_gesture(self, profile, gesture_type):
-        """Generate a single gesture of given type."""
         if gesture_type.startswith("swipe"):
             return self._generate_swipe(profile, gesture_type)
         elif gesture_type == "tap":
@@ -138,13 +125,11 @@ class TouchDataGenerator:
         elif gesture_type == "long_press":
             return self._generate_long_press(profile)
         elif gesture_type.startswith("pinch"):
-            # Simplified: treat as two-finger swipe
             return self._generate_swipe(profile, "swipe_up" if "in" in gesture_type else "swipe_down")
         else:
             return self._generate_tap(profile)
     
     def generate_dataset(self, output_dir="../../datasets/touch"):
-        """Generate full touch gesture dataset."""
         os.makedirs(output_dir, exist_ok=True)
         
         all_records = []
@@ -189,16 +174,13 @@ class TouchDataGenerator:
         
         return df
 
-
 class TouchPreprocessor:
-    """Feature extraction and preprocessing for touch gesture data."""
     
     FEATURE_COLS = [
         "duration", "n_points",
         "start_x", "start_y", "end_x", "end_y",
         "mean_pressure", "std_pressure", "max_pressure",
         "mean_area", "std_area",
-        # Derived features
         "swipe_distance", "swipe_speed", "swipe_angle",
         "pressure_range", "area_range",
         "gesture_type_encoded",
@@ -209,10 +191,8 @@ class TouchPreprocessor:
         self.df = None
     
     def load_and_process(self):
-        """Load raw data and extract features."""
         self.df = pd.read_csv(self.data_path)
         
-        # Derived features
         dx = self.df["end_x"] - self.df["start_x"]
         dy = self.df["end_y"] - self.df["start_y"]
         self.df["swipe_distance"] = np.sqrt(dx**2 + dy**2)
@@ -221,7 +201,6 @@ class TouchPreprocessor:
         self.df["pressure_range"] = self.df["max_pressure"] - self.df["mean_pressure"]
         self.df["area_range"] = self.df["std_area"] * 2
         
-        # Encode gesture type
         gesture_map = {g: i for i, g in enumerate(TouchDataGenerator.GESTURE_TYPES)}
         self.df["gesture_type_encoded"] = self.df["gesture_type"].map(gesture_map)
         
@@ -229,17 +208,14 @@ class TouchPreprocessor:
         return self.df
     
     def create_auth_dataset(self, target_user, n_impostors=5):
-        """Create authentication dataset for a target user."""
         from sklearn.preprocessing import StandardScaler
         
         genuine = self.df[self.df["user"] == target_user]
         
-        # Train/test split (70/30)
         n_train = int(len(genuine) * 0.7)
         genuine_train = genuine.iloc[:n_train]
         genuine_test = genuine.iloc[n_train:]
         
-        # Impostors
         other_users = [u for u in self.df["user"].unique() if u != target_user]
         imp_users = np.random.choice(other_users, min(n_impostors, len(other_users)), replace=False)
         impostor = self.df[self.df["user"].isin(imp_users)]
@@ -250,7 +226,6 @@ class TouchPreprocessor:
             min(len(genuine_test), len(impostor) - n_imp_train), random_state=42
         )
         
-        # Combine
         train = pd.concat([genuine_train, impostor_train])
         test = pd.concat([genuine_test, impostor_test])
         
@@ -260,7 +235,6 @@ class TouchPreprocessor:
         X_train = train[self.FEATURE_COLS].values
         X_test = test[self.FEATURE_COLS].values
         
-        # Clean and normalize
         X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0)
         X_test = np.nan_to_num(X_test, nan=0.0, posinf=0.0, neginf=0.0)
         
@@ -274,22 +248,18 @@ class TouchPreprocessor:
         
         return X_train, X_test, y_train, y_test
 
-
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     TOUCH_DIR = os.path.join(BASE_DIR, "../../datasets/touch")
     
-    # Generate
     print("=== Generating Touch Dataset ===")
     gen = TouchDataGenerator(n_users=15, gestures_per_user=200)
     df = gen.generate_dataset(output_dir=TOUCH_DIR)
     
-    # Process
     print("\n=== Processing Touch Data ===")
     proc = TouchPreprocessor(os.path.join(TOUCH_DIR, "touch_gestures.csv"))
     proc.load_and_process()
     
-    # Auth dataset
     print("\n=== Auth Dataset for user01 ===")
     X_train, X_test, y_train, y_test = proc.create_auth_dataset("user01")
     
