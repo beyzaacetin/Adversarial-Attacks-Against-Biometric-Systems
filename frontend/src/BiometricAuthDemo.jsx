@@ -90,7 +90,7 @@ function fgsmAttack(sample, mean, std, epsilon) {
 
 function pgdAttack(sample, mean, std, epsilon, steps) {
   let adv = [...sample];
-  const alpha = epsilon / 4;
+  const alpha = epsilon / steps;
   const trajectory = [];
   for (let step = 0; step < steps; step++) {
     const grad = adv.map((v, i) => {
@@ -129,6 +129,8 @@ export default function BiometricAuthDemo() {
   const [mouseScore, setMouseScore] = useState(null);
   const [mouseProfile, setMouseProfile] = useState(null);
   const [mouseEnrollSamples, setMouseEnrollSamples] = useState([]);
+  const [defenseSmoothing, setDefenseSmoothing] = useState(false);
+  const [defenseSqueezing, setDefenseSqueezing] = useState(false);
 
   const inputRef = useRef(null);
   const mouseAreaRef = useRef(null);
@@ -262,44 +264,72 @@ export default function BiometricAuthDemo() {
     setMouseTrail([]);
   };
 
+  // --- Defense helpers ---
+  const applyDefenses = (features) => {
+    let f = [...features];
+    if (defenseSmoothing) {
+      f = f.map((v) => (v + v + (Math.random() * 0.6 - 0.3)) / 2);
+    }
+    if (defenseSqueezing) {
+      const levels = 16;
+      const min = Math.min(...f);
+      const max = Math.max(...f);
+      const range = max - min + 1e-8;
+      f = f.map((v) => Math.round(((v - min) / range) * levels) / levels * range + min);
+    }
+    return f;
+  };
+
   // --- Attack ---
   const runAttack = () => {
     if (!userProfile) return;
     const { mean, std } = userProfile;
 
-    // Generate impostor baseline
     const impostor = mean.map((m, i) => m + (std[i] || 0.001) * 3 * (Math.random() * 2 - 1));
     const scoreBefore = gaussianScore(impostor, mean, std);
+    const defenseActive = defenseSmoothing || defenseSqueezing;
 
     let result;
     if (attackType === "fgsm") {
       const adv = fgsmAttack(impostor, mean, std, epsilon);
       const scoreAfter = gaussianScore(adv, mean, std);
+      const defended = defenseActive ? applyDefenses(adv) : null;
+      const defenseScore = defended ? gaussianScore(defended, mean, std) : null;
+      const defenseBlocked = defenseActive && defenseScore <= -5.0;
       result = {
         type: "FGSM", epsilon,
         scoreBefore: Math.round(scoreBefore * 1000) / 1000,
         scoreAfter: Math.round(scoreAfter * 1000) / 1000,
-        success: scoreAfter > -5.0,
+        success: scoreAfter > -5.0 && !defenseBlocked,
         perturbation: Math.round(adv.reduce((s, v, i) => s + Math.abs(v - impostor[i]), 0) * 1000) / 1000,
+        ...(defenseActive && { defenseActive, defenseBlocked, defenseScore: Math.round(defenseScore * 1000) / 1000 }),
       };
     } else if (attackType === "pgd") {
       const { adversarial, trajectory } = pgdAttack(impostor, mean, std, epsilon, pgdSteps);
       const scoreAfter = gaussianScore(adversarial, mean, std);
+      const defended = defenseActive ? applyDefenses(adversarial) : null;
+      const defenseScore = defended ? gaussianScore(defended, mean, std) : null;
+      const defenseBlocked = defenseActive && defenseScore <= -5.0;
       result = {
         type: "PGD", epsilon, steps: pgdSteps,
         scoreBefore: Math.round(scoreBefore * 1000) / 1000,
         scoreAfter: Math.round(scoreAfter * 1000) / 1000,
-        success: scoreAfter > -5.0,
+        success: scoreAfter > -5.0 && !defenseBlocked,
         trajectory: trajectory.map((t) => Math.round(t * 100) / 100),
+        ...(defenseActive && { defenseActive, defenseBlocked, defenseScore: Math.round(defenseScore * 1000) / 1000 }),
       };
     } else {
       const mim = mimicryAttack(mean, std, mimicryNoise);
       const scoreAfter = gaussianScore(mim, mean, std);
+      const defended = defenseActive ? applyDefenses(mim) : null;
+      const defenseScore = defended ? gaussianScore(defended, mean, std) : null;
+      const defenseBlocked = defenseActive && defenseScore <= -5.0;
       result = {
         type: "Mimicry", noise: mimicryNoise,
-        scoreBefore: 0,
+        scoreBefore: Math.round(scoreBefore * 1000) / 1000,
         scoreAfter: Math.round(scoreAfter * 1000) / 1000,
-        success: scoreAfter > -5.0,
+        success: scoreAfter > -5.0 && !defenseBlocked,
+        ...(defenseActive && { defenseActive, defenseBlocked, defenseScore: Math.round(defenseScore * 1000) / 1000 }),
       };
     }
     setAttackResults((p) => [result, ...p].slice(0, 15));
@@ -578,6 +608,30 @@ export default function BiometricAuthDemo() {
               </div>
             )}
 
+            {/* Defense toggles */}
+            <div style={{ borderTop: "1px solid #e0e0e0", marginTop: 12, paddingTop: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "#444", marginBottom: 8 }}>Active Defenses</div>
+              <div style={{ display: "flex", gap: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input type="checkbox" checked={defenseSmoothing}
+                    onChange={(e) => setDefenseSmoothing(e.target.checked)} />
+                  <span>Input Smoothing</span>
+                  <span style={{ fontSize: 11, color: "#999" }}>(σ=0.3)</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <input type="checkbox" checked={defenseSqueezing}
+                    onChange={(e) => setDefenseSqueezing(e.target.checked)} />
+                  <span>Feature Squeezing</span>
+                  <span style={{ fontSize: 11, color: "#999" }}>(4-bit)</span>
+                </label>
+              </div>
+              {(defenseSmoothing || defenseSqueezing) && (
+                <div style={{ marginTop: 6, fontSize: 12, color: "#0F6E56", background: "#E1F5EE", borderRadius: 6, padding: "4px 8px" }}>
+                  Defense active — adversarial features will be sanitized before scoring
+                </div>
+              )}
+            </div>
+
             <button style={btnPrimary} onClick={runAttack}>
               Launch {attackType.toUpperCase()} attack
             </button>
@@ -609,6 +663,11 @@ export default function BiometricAuthDemo() {
                     {r.epsilon && <span>ε={r.epsilon}</span>}
                     {r.noise !== undefined && <span>noise={r.noise}</span>}
                     {r.perturbation && <span>L1={r.perturbation}</span>}
+                    {r.defenseActive && (
+                      <span style={{ color: r.defenseBlocked ? "#0F6E56" : "#A32D2D", fontWeight: 500 }}>
+                        {r.defenseBlocked ? `🛡 Blocked (score: ${r.defenseScore})` : `⚠ Defense bypassed (score: ${r.defenseScore})`}
+                      </span>
+                    )}
                   </div>
                   {/* PGD trajectory mini-chart */}
                   {r.trajectory && (
